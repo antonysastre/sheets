@@ -13,11 +13,7 @@ pub struct Sheet {
 }
 
 impl Sheet {
-    pub fn new(args: &[String]) -> Result<Sheet, &str> {
-        if args.len() < 2 {
-            return Err("No sheet given.\nCommand usage: `sheets <sheetname>`");
-        }
-
+    pub fn new(name: &str) -> Result<Sheet, &str> {
         let home_path = match env::var("HOME") {
             Ok(path) => path,
             Err(_) => return Err("Failed to get HOME environment variable"),
@@ -33,10 +29,12 @@ impl Sheet {
             }
         }
 
-        let name: String = args[1].clone();
         let filepath = format!("{}/{}", sheets_dir, name);
 
-        Ok(Sheet { filepath, name })
+        Ok(Sheet {
+            filepath,
+            name: name.to_string(),
+        })
     }
 
     pub fn parse(&self) -> Result<(), Box<dyn Error>> {
