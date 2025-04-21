@@ -10,7 +10,7 @@ fn main() {
         process::exit(1);
     }
 
-    match Sheet::new(&args[1]) {
+    match Sheet::new(args[1].to_string()) {
         Ok(sheet) => {
             sheet.parse().expect("Couldn't parse the sheet.");
             process::exit(0);

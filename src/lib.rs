@@ -1,7 +1,8 @@
+use std::env;
 use std::error::Error;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
-use std::{env, path};
+use std::path::Path;
 
 const BOLD_WHITE: &str = "\x1b[1;37m";
 const FADED: &str = "  \x1b[2m";
@@ -18,7 +19,7 @@ impl Sheet {
             .map_err(|e| format!("Failed to get HOME environment variable: {}", e))?;
 
         let sheets_dir = format!("{}/.sheets", home_path);
-        let dir_exists = path::Path::new(&sheets_dir).exists();
+        let dir_exists = Path::new(&sheets_dir).try_exists().is_ok();
 
         if !dir_exists {
             fs::create_dir(&sheets_dir)
@@ -27,10 +28,7 @@ impl Sheet {
 
         let filepath = format!("{}/{}", sheets_dir, name);
 
-        Ok(Sheet {
-            filepath,
-            name: name.to_string(),
-        })
+        Ok(Sheet { name, filepath })
     }
 
     pub fn parse(&self) -> Result<(), Box<dyn Error>> {
