@@ -13,20 +13,16 @@ pub struct Sheet {
 }
 
 impl Sheet {
-    pub fn new(name: &str) -> Result<Sheet, &str> {
-        let home_path = match env::var("HOME") {
-            Ok(path) => path,
-            Err(_) => return Err("Failed to get HOME environment variable"),
-        };
+    pub fn new(name: String) -> Result<Sheet, Box<dyn Error>> {
+        let home_path = env::var("HOME")
+            .map_err(|e| format!("Failed to get HOME environment variable: {}", e))?;
 
         let sheets_dir = format!("{}/.sheets", home_path);
         let dir_exists = path::Path::new(&sheets_dir).exists();
 
         if !dir_exists {
-            match fs::create_dir(&sheets_dir) {
-                Ok(_) => (),
-                Err(_) => return Err("Failed to create .sheets directory"),
-            }
+            fs::create_dir(&sheets_dir)
+                .map_err(|e| format!("Failed to create the {} directory: {}", sheets_dir, e))?
         }
 
         let filepath = format!("{}/{}", sheets_dir, name);
