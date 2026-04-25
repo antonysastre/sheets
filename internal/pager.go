@@ -28,33 +28,44 @@ func getTerminalHeight() int {
 	return int(ws.row)
 }
 
-func readKey() byte {
+func readKey() (byte, error) {
 	fd := int(os.Stdin.Fd())
+
 	var oldTermios unix.Termios
-	unix.IoctlSetTermios(fd, unix.TCGETS, &oldTermios)
+	if err := unix.IoctlSetTermios(fd, unix.TCGETS, &oldTermios); err != nil {
+		return 0, err
+	}
+
 	newTermios := oldTermios
 	newTermios.Lflag &^= unix.ICANON | unix.ECHO
-	unix.IoctlSetTermios(fd, unix.TCSETS, &newTermios)
+	if err := unix.IoctlSetTermios(fd, unix.TCSETS, &newTermios); err != nil {
+		return 0, err
+	}
 
-	defer unix.IoctlSetTermios(fd, unix.TCSETS, &oldTermios)
+	defer func() {
+		_ = unix.IoctlSetTermios(fd, unix.TCSETS, &oldTermios)
+	}()
 
 	charBuf := make([]byte, 1)
-	os.Stdin.Read(charBuf)
+	if _, err := os.Stdin.Read(charBuf); err != nil {
+		return 0, err
+	}
 
-	return charBuf[0]
+	return charBuf[0], nil
 }
 
 func shouldContinue() bool {
 	fmt.Print("\033[90m[Press any key... (q to quit)]\033[0m")
 
-	key := readKey()
+	key, err := readKey()
+	if err != nil {
+		fmt.Println()
+		return false
+	}
 
 	fmt.Println("\r" + strings.Repeat(" ", 40) + "\r")
 
-	if key == 'q' || key == 'Q' {
-		return false
-	}
-	return true
+	return key != 'q' && key != 'Q'
 }
 
 func ViewSheet(path string) error {
