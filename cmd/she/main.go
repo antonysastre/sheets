@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"sheets/internal/sheet"
+	"github.com/antonysastre/sheets/internal/sheet"
 )
 
 func main() {
