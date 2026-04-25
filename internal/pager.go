@@ -1,10 +1,9 @@
-package main
+package internal
 
 import (
 	"fmt"
 	"os"
 	"strings"
-	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -32,21 +31,17 @@ func getTerminalHeight() int {
 func readKey() byte {
 	fd := int(os.Stdin.Fd())
 	var oldTermios unix.Termios
-	unix.IoctlSetTermios(fd, syscall.TCGETS, &oldTermios)
+	unix.IoctlSetTermios(fd, unix.TCGETS, &oldTermios)
 	newTermios := oldTermios
 	newTermios.Lflag &^= unix.ICANON | unix.ECHO
-	unix.IoctlSetTermios(fd, syscall.TCSETS, &newTermios)
+	unix.IoctlSetTermios(fd, unix.TCSETS, &newTermios)
+
+	defer unix.IoctlSetTermios(fd, unix.TCSETS, &oldTermios)
 
 	charBuf := make([]byte, 1)
 	os.Stdin.Read(charBuf)
 
-	unix.IoctlSetTermios(fd, syscall.TCSETS, &oldTermios)
 	return charBuf[0]
-}
-
-func restoreTerminal(fd int) {
-	var zero unix.Termios
-	unix.IoctlSetTermios(fd, syscall.TCSETS, &zero)
 }
 
 func shouldContinue() bool {
@@ -62,7 +57,7 @@ func shouldContinue() bool {
 	return true
 }
 
-func viewSheet(path string) error {
+func ViewSheet(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("read sheet: %w", err)
@@ -70,7 +65,7 @@ func viewSheet(path string) error {
 
 	lines := strings.Split(string(data), "\n")
 
-	validationErrors := validateFormat(lines)
+	validationErrors := ValidateFormat(lines)
 	if len(validationErrors) > 0 {
 		fmt.Println("\033[33mFormat warnings:\033[0m")
 		for _, e := range validationErrors {
@@ -94,7 +89,7 @@ func viewSheet(path string) error {
 
 		for _, line := range lines[start:end] {
 			if line != "" {
-				fmt.Println(renderLine(line))
+				fmt.Println(RenderLine(line))
 			}
 		}
 
