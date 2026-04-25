@@ -1,3 +1,5 @@
+// Command she is a small cheat-sheet manager. It stores plain-text sheets
+// under ~/.sheets and prints them with simple formatting.
 package main
 
 import (

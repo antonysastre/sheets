@@ -68,6 +68,8 @@ func shouldContinue() bool {
 	return key != 'q' && key != 'Q'
 }
 
+// View reads the sheet file at path, validates its format, and prints the
+// rendered content to standard output, paginating to terminal height.
 func View(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {

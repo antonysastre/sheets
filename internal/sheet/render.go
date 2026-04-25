@@ -12,6 +12,10 @@ const (
 	ansiItalic = "\033[3m"
 )
 
+// RenderLine formats a single sheet line for terminal display. Lines starting
+// with "//" are treated as comments and rendered as empty strings; lines
+// containing the " > " separator are split into a colored command/description
+// pair; all other lines are returned unchanged (modulo trailing newlines).
 func RenderLine(line string) string {
 	line = strings.TrimRight(line, "\r\n")
 	if strings.HasPrefix(line, "//") {
@@ -29,6 +33,9 @@ func RenderLine(line string) string {
 	return line
 }
 
+// ValidateFormat scans lines and returns human-readable messages for any
+// non-empty, non-comment line that does not contain the " > " separator.
+// The returned slice is empty when the input is well-formed.
 func ValidateFormat(lines []string) []string {
 	var errors []string
 	realLineNum := 0
