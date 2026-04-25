@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"sheets/internal"
+	"sheets/internal/sheet"
 )
 
 func main() {
@@ -13,7 +13,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := internal.EnsureSheetsDir(); err != nil {
+	if err := sheet.EnsureSheetsDir(); err != nil {
 		die("failed to create sheets directory: %v", err)
 	}
 
@@ -23,7 +23,7 @@ func main() {
 			fmt.Println("Usage: she edit <tool>")
 			os.Exit(1)
 		}
-		if err := internal.HandleEdit(os.Args[2]); err != nil {
+		if err := sheet.HandleEdit(os.Args[2]); err != nil {
 			die("edit failed: %v", err)
 		}
 
@@ -32,12 +32,12 @@ func main() {
 			fmt.Println("Usage: she new <tool>")
 			os.Exit(1)
 		}
-		if err := internal.HandleNew(os.Args[2]); err != nil {
+		if err := sheet.HandleNew(os.Args[2]); err != nil {
 			die("new failed: %v", err)
 		}
 
 	case "list", "ls", "l":
-		if err := internal.HandleList(); err != nil {
+		if err := sheet.HandleList(); err != nil {
 			die("list failed: %v", err)
 		}
 
@@ -46,8 +46,8 @@ func main() {
 
 	default:
 		name := os.Args[1]
-		if internal.SheetExists(name) {
-			if err := internal.ViewSheet(internal.GetSheetPath(name)); err != nil {
+		if sheet.SheetExists(name) {
+			if err := sheet.ViewSheet(sheet.GetSheetPath(name)); err != nil {
 				die("failed to view sheet: %v", err)
 			}
 			return
