@@ -7,9 +7,6 @@ archives:
       - README*
       - LICENSE
 
-checksum:
-  mode: strict
-
 release:
   github:
     owner: antonysastre
@@ -29,6 +26,3 @@ builds:
     goarch:
       - amd64
       - arm64
-
-snapshot:
-  name: "{{ .Version }}"
