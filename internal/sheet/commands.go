@@ -11,7 +11,7 @@ import (
 
 const defaultEditor = "vim"
 
-func GetSheetsDir() string {
+func Dir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		die("cannot find home directory: %v", err)
@@ -19,8 +19,8 @@ func GetSheetsDir() string {
 	return filepath.Join(home, ".sheets")
 }
 
-func GetSheetPath(name string) string {
-	dir := GetSheetsDir()
+func Path(name string) string {
+	dir := Dir()
 
 	direct := filepath.Join(dir, name)
 	if _, err := os.Stat(direct); err == nil {
@@ -38,18 +38,18 @@ func GetSheetPath(name string) string {
 	return direct
 }
 
-func EnsureSheetsDir() error {
-	dir := GetSheetsDir()
+func EnsureDir() error {
+	dir := Dir()
 	return os.MkdirAll(dir, 0755)
 }
 
-func SheetExists(name string) bool {
-	_, err := os.Stat(GetSheetPath(name))
+func Exists(name string) bool {
+	_, err := os.Stat(Path(name))
 	return err == nil
 }
 
-func CreateSheet(name string) (err error) {
-	path := GetSheetPath(name)
+func Create(name string) (err error) {
+	path := Path(name)
 	f, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("create sheet: %w", err)
@@ -65,17 +65,17 @@ func CreateSheet(name string) (err error) {
 	return err
 }
 
-func HandleEdit(name string) error {
-	if err := EnsureSheetsDir(); err != nil {
+func Edit(name string) error {
+	if err := EnsureDir(); err != nil {
 		return fmt.Errorf("create sheets directory: %w", err)
 	}
 
-	path := GetSheetPath(name)
+	path := Path(name)
 
 	exists := true
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		exists = false
-		if err := CreateSheet(name); err != nil {
+		if err := Create(name); err != nil {
 			return fmt.Errorf("create sheet: %w", err)
 		}
 	}
@@ -86,21 +86,19 @@ func HandleEdit(name string) error {
 		fmt.Printf("Created: %s\n", name)
 	}
 
-	editor := getEditor()
-
-	cmd := exec.Command(editor, path)
+	cmd := exec.Command(editor(), path)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
 
-func HandleList() error {
-	if err := EnsureSheetsDir(); err != nil {
+func List() error {
+	if err := EnsureDir(); err != nil {
 		return fmt.Errorf("create sheets directory: %w", err)
 	}
 
-	dir := GetSheetsDir()
+	dir := Dir()
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -126,37 +124,34 @@ func HandleList() error {
 	return nil
 }
 
-func HandleNew(name string) error {
-	path := GetSheetPath(name)
+func New(name string) error {
+	path := Path(name)
 
 	if _, err := os.Stat(path); err == nil {
 		return fmt.Errorf("sheet %q already exists; use 'she edit %s' to edit", name, name)
 	}
 
-	if err := CreateSheet(name); err != nil {
+	if err := Create(name); err != nil {
 		return fmt.Errorf("create sheet: %w", err)
 	}
 
 	fmt.Printf("Created: %s\n", name)
 
-	editor := getEditor()
-
-	cmd := exec.Command(editor, path)
+	cmd := exec.Command(editor(), path)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
 
-func getEditor() string {
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		editor = os.Getenv("VISUAL")
+func editor() string {
+	if e := os.Getenv("EDITOR"); e != "" {
+		return e
 	}
-	if editor == "" {
-		editor = defaultEditor
+	if e := os.Getenv("VISUAL"); e != "" {
+		return e
 	}
-	return editor
+	return defaultEditor
 }
 
 func die(format string, args ...interface{}) {

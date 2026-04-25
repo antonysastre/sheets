@@ -16,7 +16,7 @@ type winsize struct {
 	ypixel uint16
 }
 
-func getTerminalHeight() int {
+func terminalHeight() int {
 	var ws winsize
 	ret, _, _ := unix.Syscall(unix.SYS_IOCTL, uintptr(os.Stdout.Fd()), uintptr(unix.TIOCGWINSZ), uintptr(unsafe.Pointer(&ws)))
 	if ret != 0 {
@@ -68,7 +68,7 @@ func shouldContinue() bool {
 	return key != 'q' && key != 'Q'
 }
 
-func ViewSheet(path string) error {
+func View(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("read sheet: %w", err)
@@ -85,7 +85,7 @@ func ViewSheet(path string) error {
 		fmt.Println()
 	}
 
-	termHeight := getTerminalHeight()
+	termHeight := terminalHeight()
 	pageSize := termHeight - 2
 	if pageSize < 5 {
 		pageSize = 10
