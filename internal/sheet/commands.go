@@ -1,3 +1,6 @@
+// Package sheet implements the storage and command operations for she's
+// cheat sheets: locating the sheets directory, creating sheets from a
+// template, and invoking the user's editor.
 package sheet
 
 import (
@@ -11,6 +14,8 @@ import (
 
 const defaultEditor = "vim"
 
+// Dir returns the absolute path to the directory where sheets are stored
+// (~/.sheets), or an error if the user's home directory cannot be determined.
 func Dir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -19,6 +24,10 @@ func Dir() (string, error) {
 	return filepath.Join(home, ".sheets"), nil
 }
 
+// Path returns the on-disk path for the sheet identified by name. If a file
+// with the exact name exists it is returned; otherwise the extension is
+// stripped and the bare-name path is tried. When neither exists, the
+// exact-name path is returned so callers can use it as a creation target.
 func Path(name string) (string, error) {
 	dir, err := Dir()
 	if err != nil {
@@ -41,6 +50,7 @@ func Path(name string) (string, error) {
 	return direct, nil
 }
 
+// EnsureDir creates the sheets directory if it does not already exist.
 func EnsureDir() error {
 	dir, err := Dir()
 	if err != nil {
@@ -49,6 +59,7 @@ func EnsureDir() error {
 	return os.MkdirAll(dir, 0755)
 }
 
+// Exists reports whether a sheet with the given name is stored on disk.
 func Exists(name string) bool {
 	path, err := Path(name)
 	if err != nil {
@@ -58,6 +69,8 @@ func Exists(name string) bool {
 	return err == nil
 }
 
+// Create writes a new sheet file for name, populated with a small template.
+// It is an error to call Create for a sheet that already exists.
 func Create(name string) (err error) {
 	path, err := Path(name)
 	if err != nil {
@@ -67,6 +80,8 @@ func Create(name string) (err error) {
 	if err != nil {
 		return fmt.Errorf("create sheet: %w", err)
 	}
+	// Named return + errors.Join so a Close failure isn't silently dropped
+	// when WriteString already succeeded.
 	defer func() {
 		if cerr := f.Close(); cerr != nil {
 			err = errors.Join(err, cerr)
@@ -78,6 +93,8 @@ func Create(name string) (err error) {
 	return err
 }
 
+// Edit opens the sheet for name in the user's editor, creating it from the
+// template first if it does not yet exist.
 func Edit(name string) error {
 	if err := EnsureDir(); err != nil {
 		return fmt.Errorf("create sheets directory: %w", err)
@@ -109,6 +126,7 @@ func Edit(name string) error {
 	return cmd.Run()
 }
 
+// List prints the names of all stored sheets to standard output.
 func List() error {
 	if err := EnsureDir(); err != nil {
 		return fmt.Errorf("create sheets directory: %w", err)
@@ -143,6 +161,8 @@ func List() error {
 	return nil
 }
 
+// New creates a fresh sheet for name and opens it in the editor. It returns
+// an error if a sheet with that name already exists.
 func New(name string) error {
 	path, err := Path(name)
 	if err != nil {
