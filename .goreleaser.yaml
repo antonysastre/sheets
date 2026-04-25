@@ -1,0 +1,31 @@
+project_name: she
+
+archives:
+  - format: tar.gz
+    files:
+      - README*
+      - LICENSE
+
+checksum:
+  mode: strict
+
+release:
+  github:
+    owner: antonysastre
+    name: sheets
+
+builds:
+  - id: she
+    main: ./cmd/she
+    binary: she
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+snapshot:
+  name: "{{ .Version }}"

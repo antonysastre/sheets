@@ -4,11 +4,19 @@ A simple command-line cheat sheet manager.
 
 ## Installation
 
+### Pre-built binary (recommended)
+
+```bash
+curl -fsSL https://antonysastre.github.io/sheets/install.sh | bash
+```
+
+Or download from [Releases](https://github.com/antonysastre/sheets/releases).
+
+### From source
+
 ```bash
 go install ./...
 ```
-
-Or copy the `she` binary to your PATH.
 
 ## Usage
 
