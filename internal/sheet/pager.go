@@ -5,33 +5,26 @@ import (
 	"os"
 	"strings"
 
-	"golang.org/x/sys/unix"
+	"golang.org/x/term"
 )
 
 func terminalHeight() int {
 	const fallback = 24
-	ws, err := unix.IoctlGetWinsize(int(os.Stdout.Fd()), unix.TIOCGWINSZ)
-	if err != nil || ws.Row == 0 {
+	_, h, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil || h == 0 {
 		return fallback
 	}
-	return int(ws.Row)
+	return h
 }
 
 func readKey() (byte, error) {
 	fd := int(os.Stdin.Fd())
-
-	oldTermios, err := unix.IoctlGetTermios(fd, unix.TCGETS)
+	oldState, err := term.MakeRaw(fd)
 	if err != nil {
 		return 0, err
 	}
-
-	newTermios := *oldTermios
-	newTermios.Lflag &^= unix.ICANON | unix.ECHO
-	if err := unix.IoctlSetTermios(fd, unix.TCSETS, &newTermios); err != nil {
-		return 0, err
-	}
 	defer func() {
-		_ = unix.IoctlSetTermios(fd, unix.TCSETS, oldTermios)
+		_ = term.Restore(fd, oldState)
 	}()
 
 	buf := make([]byte, 1)
