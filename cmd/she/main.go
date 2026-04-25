@@ -47,7 +47,11 @@ func main() {
 	default:
 		name := os.Args[1]
 		if sheet.Exists(name) {
-			if err := sheet.View(sheet.Path(name)); err != nil {
+			path, err := sheet.Path(name)
+			if err != nil {
+				die("failed to resolve sheet path: %v", err)
+			}
+			if err := sheet.View(path); err != nil {
 				die("failed to view sheet: %v", err)
 			}
 			return
