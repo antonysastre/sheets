@@ -11,20 +11,23 @@ import (
 
 const defaultEditor = "vim"
 
-func Dir() string {
+func Dir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		die("cannot find home directory: %v", err)
+		return "", fmt.Errorf("locate home directory: %w", err)
 	}
-	return filepath.Join(home, ".sheets")
+	return filepath.Join(home, ".sheets"), nil
 }
 
-func Path(name string) string {
-	dir := Dir()
+func Path(name string) (string, error) {
+	dir, err := Dir()
+	if err != nil {
+		return "", err
+	}
 
 	direct := filepath.Join(dir, name)
 	if _, err := os.Stat(direct); err == nil {
-		return direct
+		return direct, nil
 	}
 
 	base := name
@@ -32,24 +35,34 @@ func Path(name string) string {
 		base = strings.TrimSuffix(name, ext)
 	}
 	if _, err := os.Stat(filepath.Join(dir, base)); err == nil {
-		return filepath.Join(dir, base)
+		return filepath.Join(dir, base), nil
 	}
 
-	return direct
+	return direct, nil
 }
 
 func EnsureDir() error {
-	dir := Dir()
+	dir, err := Dir()
+	if err != nil {
+		return err
+	}
 	return os.MkdirAll(dir, 0755)
 }
 
 func Exists(name string) bool {
-	_, err := os.Stat(Path(name))
+	path, err := Path(name)
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(path)
 	return err == nil
 }
 
 func Create(name string) (err error) {
-	path := Path(name)
+	path, err := Path(name)
+	if err != nil {
+		return err
+	}
 	f, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("create sheet: %w", err)
@@ -70,7 +83,10 @@ func Edit(name string) error {
 		return fmt.Errorf("create sheets directory: %w", err)
 	}
 
-	path := Path(name)
+	path, err := Path(name)
+	if err != nil {
+		return err
+	}
 
 	exists := true
 	if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -98,7 +114,10 @@ func List() error {
 		return fmt.Errorf("create sheets directory: %w", err)
 	}
 
-	dir := Dir()
+	dir, err := Dir()
+	if err != nil {
+		return err
+	}
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -125,7 +144,10 @@ func List() error {
 }
 
 func New(name string) error {
-	path := Path(name)
+	path, err := Path(name)
+	if err != nil {
+		return err
+	}
 
 	if _, err := os.Stat(path); err == nil {
 		return fmt.Errorf("sheet %q already exists; use 'she edit %s' to edit", name, name)
@@ -152,9 +174,4 @@ func editor() string {
 		return e
 	}
 	return defaultEditor
-}
-
-func die(format string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, format+"\n", args...)
-	os.Exit(1)
 }
