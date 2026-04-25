@@ -1,0 +1,139 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+func getSheetsDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		die("cannot find home directory: %v", err)
+	}
+	return filepath.Join(home, ".sheets")
+}
+
+func getSheetPath(name string) string {
+	dir := getSheetsDir()
+
+	direct := filepath.Join(dir, name)
+	if _, err := os.Stat(direct); err == nil {
+		return direct
+	}
+
+	base := name
+	if ext := filepath.Ext(name); ext != "" {
+		base = strings.TrimSuffix(name, ext)
+	}
+	if _, err := os.Stat(filepath.Join(dir, base)); err == nil {
+		return filepath.Join(dir, base)
+	}
+
+	return direct
+}
+
+func ensureSheetsDir() error {
+	dir := getSheetsDir()
+	return os.MkdirAll(dir, 0755)
+}
+
+func sheetExists(name string) bool {
+	_, err := os.Stat(getSheetPath(name))
+	return err == nil
+}
+
+func createSheet(name string) error {
+	path := getSheetPath(name)
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("create sheet: %w", err)
+	}
+	defer f.Close()
+
+	template := "command > description\ncommand > description\n"
+	_, err = f.WriteString(template)
+	return err
+}
+
+func askYesNo(prompt string) bool {
+	fmt.Print(prompt, " [y/N] ")
+	var answer string
+	if _, err := fmt.Scanln(&answer); err != nil {
+		return false
+	}
+	return answer == "y" || answer == "Y"
+}
+
+func die(format string, args ...interface{}) {
+	fmt.Fprintf(os.Stderr, format+"\n", args...)
+	os.Exit(1)
+}
+
+func main() {
+	if len(os.Args) < 2 {
+		printUsage()
+		os.Exit(1)
+	}
+
+	if err := ensureSheetsDir(); err != nil {
+		die("failed to create sheets directory: %v", err)
+	}
+
+	switch os.Args[1] {
+	case "edit", "e":
+		if len(os.Args) < 3 {
+			fmt.Println("Usage: she edit <tool>")
+			os.Exit(1)
+		}
+		if err := handleEdit(os.Args[2]); err != nil {
+			die("edit failed: %v", err)
+		}
+
+	case "new", "n":
+		if len(os.Args) < 3 {
+			fmt.Println("Usage: she new <tool>")
+			os.Exit(1)
+		}
+		if err := handleNew(os.Args[2]); err != nil {
+			die("new failed: %v", err)
+		}
+
+	case "list", "ls", "l":
+		if err := handleList(); err != nil {
+			die("list failed: %v", err)
+		}
+
+	case "help", "h", "-h", "--help":
+		printUsage()
+
+	default:
+		name := os.Args[1]
+		if sheetExists(name) {
+			if err := viewSheet(getSheetPath(name)); err != nil {
+				die("failed to view sheet: %v", err)
+			}
+			return
+		}
+
+		fmt.Printf("No cheat sheet found for '%s'\n", name)
+		fmt.Println("Run 'she edit " + name + "' to create one.")
+	}
+}
+
+func printUsage() {
+	fmt.Println(`she - cheat sheet manager
+
+Usage:
+  she list		List all cheat sheets
+  she <tool>		View cheat sheet
+  she edit <tool>	Edit cheat sheet (creates if missing)
+  she new <tool>	Create new cheat sheet
+  she help		Show this help
+
+Examples:
+  she docker		View docker sheet
+  she edit docker		Edit docker sheet
+  she list		Show all sheets`)
+}

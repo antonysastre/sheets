@@ -1,0 +1,112 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"strings"
+	"syscall"
+	"unsafe"
+
+	"golang.org/x/sys/unix"
+)
+
+type winsize struct {
+	row    uint16
+	col    uint16
+	xpixel uint16
+	ypixel uint16
+}
+
+func getTerminalHeight() int {
+	var ws winsize
+	ret, _, _ := unix.Syscall(unix.SYS_IOCTL, uintptr(os.Stdout.Fd()), uintptr(unix.TIOCGWINSZ), uintptr(unsafe.Pointer(&ws)))
+	if ret != 0 {
+		return 24
+	}
+	if ws.row == 0 {
+		return 24
+	}
+	return int(ws.row)
+}
+
+func readKey() byte {
+	fd := int(os.Stdin.Fd())
+	var oldTermios unix.Termios
+	unix.IoctlSetTermios(fd, syscall.TCGETS, &oldTermios)
+	newTermios := oldTermios
+	newTermios.Lflag &^= unix.ICANON | unix.ECHO
+	unix.IoctlSetTermios(fd, syscall.TCSETS, &newTermios)
+
+	charBuf := make([]byte, 1)
+	os.Stdin.Read(charBuf)
+
+	unix.IoctlSetTermios(fd, syscall.TCSETS, &oldTermios)
+	return charBuf[0]
+}
+
+func restoreTerminal(fd int) {
+	var zero unix.Termios
+	unix.IoctlSetTermios(fd, syscall.TCSETS, &zero)
+}
+
+func shouldContinue() bool {
+	fmt.Print("\033[90m[Press any key... (q to quit)]\033[0m")
+
+	key := readKey()
+
+	fmt.Println("\r" + strings.Repeat(" ", 40) + "\r")
+
+	if key == 'q' || key == 'Q' {
+		return false
+	}
+	return true
+}
+
+func viewSheet(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read sheet: %w", err)
+	}
+
+	lines := strings.Split(string(data), "\n")
+
+	validationErrors := validateFormat(lines)
+	if len(validationErrors) > 0 {
+		fmt.Println("\033[33mFormat warnings:\033[0m")
+		for _, e := range validationErrors {
+			fmt.Println("  ", e)
+		}
+		fmt.Println()
+	}
+
+	termHeight := getTerminalHeight()
+	pageSize := termHeight - 2
+	if pageSize < 5 {
+		pageSize = 10
+	}
+
+	start := 0
+	for {
+		end := start + pageSize
+		if end > len(lines) {
+			end = len(lines)
+		}
+
+		for _, line := range lines[start:end] {
+			if line != "" {
+				fmt.Println(renderLine(line))
+			}
+		}
+
+		if end >= len(lines) {
+			break
+		}
+
+		if !shouldContinue() {
+			break
+		}
+		start = end
+	}
+
+	return nil
+}
