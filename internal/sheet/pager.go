@@ -4,54 +4,41 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"unsafe"
 
 	"golang.org/x/sys/unix"
 )
 
-type winsize struct {
-	row    uint16
-	col    uint16
-	xpixel uint16
-	ypixel uint16
-}
-
 func terminalHeight() int {
-	var ws winsize
-	ret, _, _ := unix.Syscall(unix.SYS_IOCTL, uintptr(os.Stdout.Fd()), uintptr(unix.TIOCGWINSZ), uintptr(unsafe.Pointer(&ws)))
-	if ret != 0 {
-		return 24
+	const fallback = 24
+	ws, err := unix.IoctlGetWinsize(int(os.Stdout.Fd()), unix.TIOCGWINSZ)
+	if err != nil || ws.Row == 0 {
+		return fallback
 	}
-	if ws.row == 0 {
-		return 24
-	}
-	return int(ws.row)
+	return int(ws.Row)
 }
 
 func readKey() (byte, error) {
 	fd := int(os.Stdin.Fd())
 
-	var oldTermios unix.Termios
-	if err := unix.IoctlSetTermios(fd, unix.TCGETS, &oldTermios); err != nil {
+	oldTermios, err := unix.IoctlGetTermios(fd, unix.TCGETS)
+	if err != nil {
 		return 0, err
 	}
 
-	newTermios := oldTermios
+	newTermios := *oldTermios
 	newTermios.Lflag &^= unix.ICANON | unix.ECHO
 	if err := unix.IoctlSetTermios(fd, unix.TCSETS, &newTermios); err != nil {
 		return 0, err
 	}
-
 	defer func() {
-		_ = unix.IoctlSetTermios(fd, unix.TCSETS, &oldTermios)
+		_ = unix.IoctlSetTermios(fd, unix.TCSETS, oldTermios)
 	}()
 
-	charBuf := make([]byte, 1)
-	if _, err := os.Stdin.Read(charBuf); err != nil {
+	buf := make([]byte, 1)
+	if _, err := os.Stdin.Read(buf); err != nil {
 		return 0, err
 	}
-
-	return charBuf[0], nil
+	return buf[0], nil
 }
 
 func shouldContinue() bool {
@@ -87,8 +74,7 @@ func View(path string) error {
 		fmt.Println()
 	}
 
-	termHeight := terminalHeight()
-	pageSize := termHeight - 2
+	pageSize := terminalHeight() - 2
 	if pageSize < 5 {
 		pageSize = 10
 	}
