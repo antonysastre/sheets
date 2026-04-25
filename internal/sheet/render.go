@@ -38,15 +38,15 @@ func RenderLine(line string) string {
 // The returned slice is empty when the input is well-formed.
 func ValidateFormat(lines []string) []string {
 	var issues []string
-	realLineNum := 0
+	n := 0
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "//") {
 			continue
 		}
-		realLineNum++
+		n++
 		if !strings.Contains(line, " > ") {
-			issues = append(issues, fmt.Sprintf("line %d: missing ' > ' separator", realLineNum))
+			issues = append(issues, fmt.Sprintf("line %d: missing ' > ' separator", n))
 		}
 	}
 	return issues
