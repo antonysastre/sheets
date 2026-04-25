@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -47,13 +48,17 @@ func SheetExists(name string) bool {
 	return err == nil
 }
 
-func CreateSheet(name string) error {
+func CreateSheet(name string) (err error) {
 	path := GetSheetPath(name)
 	f, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("create sheet: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			err = errors.Join(err, cerr)
+		}
+	}()
 
 	template := "command > description\ncommand > description\n"
 	_, err = f.WriteString(template)
@@ -125,7 +130,7 @@ func HandleNew(name string) error {
 	path := GetSheetPath(name)
 
 	if _, err := os.Stat(path); err == nil {
-		return fmt.Errorf("sheet '%s' already exists. Use 'she edit %s' to edit.", name, name)
+		return fmt.Errorf("sheet %q already exists; use 'she edit %s' to edit", name, name)
 	}
 
 	if err := CreateSheet(name); err != nil {

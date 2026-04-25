@@ -1,8 +1,9 @@
 # Binary
-she
+/she
 cmd/she/she
 
-# Go
+# Build
+ dist/
 *.test
 coverage.txt
 
