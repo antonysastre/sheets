@@ -42,7 +42,7 @@ func readKey() (byte, error) {
 }
 
 func shouldContinue() bool {
-	fmt.Print("\033[90m[Press any key... (q to quit)]\033[0m")
+	fmt.Print("\x1b[90m[Press any key... (q to quit)]\x1b[0m")
 
 	key, err := readKey()
 	if err != nil {
@@ -65,11 +65,10 @@ func View(path string) error {
 
 	lines := strings.Split(string(data), "\n")
 
-	validationErrors := ValidateFormat(lines)
-	if len(validationErrors) > 0 {
-		fmt.Println("\033[33mFormat warnings:\033[0m")
-		for _, e := range validationErrors {
-			fmt.Println("  ", e)
+	if issues := ValidateFormat(lines); len(issues) > 0 {
+		fmt.Println("\x1b[33mFormat warnings:\x1b[0m")
+		for _, msg := range issues {
+			fmt.Println("  ", msg)
 		}
 		fmt.Println()
 	}

@@ -56,7 +56,7 @@ func EnsureDir() error {
 	if err != nil {
 		return err
 	}
-	return os.MkdirAll(dir, 0755)
+	return os.MkdirAll(dir, 0o755)
 }
 
 // Exists reports whether a sheet with the given name is stored on disk.
@@ -88,7 +88,7 @@ func Create(name string) (err error) {
 		}
 	}()
 
-	template := "command > description\ncommand > description\n"
+	const template = "command > description\ncommand > description\n"
 	_, err = f.WriteString(template)
 	return err
 }
@@ -151,12 +151,12 @@ func List() error {
 		return nil
 	}
 
-	fmt.Println("\033[36;1mAvailable sheets:\033[0m")
+	fmt.Println("\x1b[36;1mAvailable sheets:\x1b[0m")
 	for _, entry := range entries {
 		if entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
-		fmt.Printf("  \033[32m%s\033[0m\n", entry.Name())
+		fmt.Printf("  \x1b[32m%s\x1b[0m\n", entry.Name())
 	}
 	return nil
 }
