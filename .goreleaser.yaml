@@ -13,6 +13,8 @@ release:
   github:
     owner: antonysastre
     name: sheets
+  extra_files:
+    - glob: ./scripts/install.sh
 
 builds:
   - id: she

@@ -1,6 +1,6 @@
 #!/bin/bash
 # she installer - curl | bash installation
-# Usage: curl -fsSL https://antonysastre.github.io/sheets/install.sh | bash
+# Usage: curl -fsSL https://github.com/antonysastre/sheets/releases/latest/download/install.sh | bash
 #
 # Or run locally after cloning:
 #   ./scripts/install.sh

@@ -7,7 +7,7 @@ A simple command-line cheat sheet manager.
 ### Pre-built binary (recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/antonysastre/sheets/main/scripts/install.sh | bash
+curl -fsSL https://github.com/antonysastre/sheets/releases/latest/download/install.sh | bash
 ```
 
 Or download from [Releases](https://github.com/antonysastre/sheets/releases).
@@ -45,3 +45,19 @@ export EDITOR=vim  # or VISUAL
 ```
 
 Sheets are stored in `~/.sheets/`.
+
+## Releasing
+
+Releases are cut by pushing a semver tag — GitHub Actions runs goreleaser
+and publishes the binaries plus `install.sh` as release assets.
+
+```bash
+git tag -a v0.1.0 -m "v0.1.0"
+git push origin v0.1.0
+```
+
+To dry-run goreleaser locally without publishing:
+
+```bash
+goreleaser release --snapshot --clean --skip=publish
+```
