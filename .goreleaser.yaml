@@ -3,6 +3,7 @@ project_name: she
 
 archives:
   - format: tar.gz
+    name_template: '{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}'
     files:
       - README*
       - LICENSE
