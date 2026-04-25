@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"fmt"
@@ -9,11 +9,10 @@ const (
 	ansiReset  = "\033[0m"
 	ansiDim    = "\033[90m"
 	ansiGreen  = "\033[32;1m"
-	ansiCyan   = "\033[36;1m"
 	ansiItalic = "\033[3m"
 )
 
-func renderLine(line string) string {
+func RenderLine(line string) string {
 	line = strings.TrimRight(line, "\r\n")
 	if strings.HasPrefix(line, "//") {
 		return ""
@@ -30,12 +29,12 @@ func renderLine(line string) string {
 	return line
 }
 
-func validateFormat(lines []string) []string {
+func ValidateFormat(lines []string) []string {
 	var errors []string
 	realLineNum := 0
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if line == "" {
+		if line == "" || strings.HasPrefix(line, "//") {
 			continue
 		}
 		realLineNum++

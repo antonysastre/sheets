@@ -1,1 +1,17 @@
+# Binary
 she
+cmd/she/she
+
+# Go
+*.test
+coverage.txt
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
