@@ -15,7 +15,7 @@ Or download from [Releases](https://github.com/antonysastre/sheets/releases).
 ### From source
 
 ```bash
-go install ./...
+go install github.com/antonysastre/sheets/cmd/she@latest
 ```
 
 ## Usage
