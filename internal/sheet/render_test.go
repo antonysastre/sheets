@@ -4,14 +4,14 @@ import "testing"
 
 func TestRenderLine(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		want     string
+		name      string
+		input     string
+		want      string
 		wantEmpty bool
 	}{
 		{
-			name:     "comment ignored",
-			input:    "// this is a comment",
+			name:      "comment ignored",
+			input:     "// this is a comment",
 			wantEmpty: true,
 		},
 		{

@@ -6,10 +6,10 @@ import (
 )
 
 const (
-	ansiReset  = "\033[0m"
-	ansiDim    = "\033[90m"
-	ansiGreen  = "\033[32;1m"
-	ansiItalic = "\033[3m"
+	ansiReset  = "\x1b[0m"
+	ansiDim    = "\x1b[90m"
+	ansiGreen  = "\x1b[32;1m"
+	ansiItalic = "\x1b[3m"
 )
 
 // RenderLine formats a single sheet line for terminal display. Lines starting
@@ -37,7 +37,7 @@ func RenderLine(line string) string {
 // non-empty, non-comment line that does not contain the " > " separator.
 // The returned slice is empty when the input is well-formed.
 func ValidateFormat(lines []string) []string {
-	var errors []string
+	var issues []string
 	realLineNum := 0
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -46,8 +46,8 @@ func ValidateFormat(lines []string) []string {
 		}
 		realLineNum++
 		if !strings.Contains(line, " > ") {
-			errors = append(errors, fmt.Sprintf("line %d: missing ' > ' separator", realLineNum))
+			issues = append(issues, fmt.Sprintf("line %d: missing ' > ' separator", realLineNum))
 		}
 	}
-	return errors
+	return issues
 }
