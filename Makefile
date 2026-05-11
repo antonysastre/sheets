@@ -1,10 +1,13 @@
 .PHONY: build install test lint clean
 
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS := -X main.version=$(VERSION)
+
 build:
-	go build -o she ./cmd/she
+	go build -ldflags "$(LDFLAGS)" -o she ./cmd/she
 
 install:
-	go install ./cmd/she
+	go install -ldflags "$(LDFLAGS)" ./cmd/she
 
 test:
 	go test -v ./...

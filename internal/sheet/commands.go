@@ -100,6 +100,10 @@ func Edit(name string) error {
 		return fmt.Errorf("create sheets directory: %w", err)
 	}
 
+	if err := Sync(); err != nil {
+		return fmt.Errorf("sync before edit failed: %w", err)
+	}
+
 	path, err := Path(name)
 	if err != nil {
 		return err
@@ -123,13 +127,24 @@ func Edit(name string) error {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+
+	editErr := cmd.Run()
+
+	if syncErr := Sync(); syncErr != nil {
+		fmt.Fprintf(os.Stderr, "Warning: sync after edit failed: %v\n", syncErr)
+	}
+
+	return editErr
 }
 
 // List prints the names of all stored sheets to standard output.
 func List() error {
 	if err := EnsureDir(); err != nil {
 		return fmt.Errorf("create sheets directory: %w", err)
+	}
+
+	if err := Sync(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: sync before list failed: %v\n", err)
 	}
 
 	dir, err := Dir()
@@ -140,14 +155,14 @@ func List() error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			fmt.Println("No sheets found. Run 'she edit <tool>' to create one.")
+			fmt.Println("No sheets found. Run 'she --sync' to pull from remote, or 'she --edit <tool>' to create one.")
 			return nil
 		}
 		return fmt.Errorf("read directory: %w", err)
 	}
 
 	if len(entries) == 0 {
-		fmt.Println("No sheets found. Run 'she edit <tool>' to create one.")
+		fmt.Println("No sheets found. Run 'she --sync' to pull from remote, or 'she --edit <tool>' to create one.")
 		return nil
 	}
 
@@ -164,13 +179,17 @@ func List() error {
 // New creates a fresh sheet for name and opens it in the editor. It returns
 // an error if a sheet with that name already exists.
 func New(name string) error {
+	if err := Sync(); err != nil {
+		return fmt.Errorf("sync before new failed: %w", err)
+	}
+
 	path, err := Path(name)
 	if err != nil {
 		return err
 	}
 
 	if _, err := os.Stat(path); err == nil {
-		return fmt.Errorf("sheet %q already exists; use 'she edit %s' to edit", name, name)
+		return fmt.Errorf("sheet %q already exists; use 'she --edit %s' to edit", name, name)
 	}
 
 	if err := Create(name); err != nil {
@@ -183,7 +202,14 @@ func New(name string) error {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+
+	editErr := cmd.Run()
+
+	if syncErr := Sync(); syncErr != nil {
+		fmt.Fprintf(os.Stderr, "Warning: sync after new failed: %v\n", syncErr)
+	}
+
+	return editErr
 }
 
 func editor() string {
