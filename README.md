@@ -21,11 +21,11 @@ go install github.com/antonysastre/sheets/cmd/she@latest
 ## Usage
 
 ```
-she list          List all cheat sheets
-she <tool>       View cheat sheet
-she edit <tool>  Edit cheat sheet (creates if missing)
-she new <tool>   Create new cheat sheet
-she help         Show help
+she <tool>            View cheat sheet
+she --list, -l        List all cheat sheets
+she --edit, -e <tool> Edit cheat sheet (creates if missing)
+she --new, -n <tool>  Create new cheat sheet
+she --help, -h        Show help
 ```
 
 ## Sheet Format
