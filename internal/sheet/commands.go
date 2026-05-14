@@ -140,14 +140,14 @@ func List() error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			fmt.Println("No sheets found. Run 'she edit <tool>' to create one.")
+			fmt.Println("No sheets found. Run 'she --edit <tool>' to create one.")
 			return nil
 		}
 		return fmt.Errorf("read directory: %w", err)
 	}
 
 	if len(entries) == 0 {
-		fmt.Println("No sheets found. Run 'she edit <tool>' to create one.")
+		fmt.Println("No sheets found. Run 'she --edit <tool>' to create one.")
 		return nil
 	}
 
@@ -170,7 +170,7 @@ func New(name string) error {
 	}
 
 	if _, err := os.Stat(path); err == nil {
-		return fmt.Errorf("sheet %q already exists; use 'she edit %s' to edit", name, name)
+		return fmt.Errorf("sheet %q already exists; use 'she --edit %s' to edit", name, name)
 	}
 
 	if err := Create(name); err != nil {
