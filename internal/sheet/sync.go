@@ -112,7 +112,9 @@ func syncSetup(dir, repo string) error {
 	fmt.Fprintln(os.Stderr, "Fetching remote sheets...")
 	if err := streamGit(dir, "fetch", "origin"); err != nil {
 		rollback()
-		return err
+		return fmt.Errorf("could not reach the remote %s — check the "+
+			"repository exists and you have access; no changes were made to %s",
+			displayRepo, dir)
 	}
 
 	if remoteBranchExists(dir, syncBranch) {
