@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -11,97 +12,130 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		printUsage()
-		os.Exit(1)
+	os.Exit(run(os.Args, os.Stdout, os.Stderr))
+}
+
+// run dispatches a single she invocation and returns the process exit code:
+// 0 on success, 1 for a runtime failure, 2 for a command-line usage error.
+// Arguments and output streams are passed in explicitly so run can be
+// exercised by tests without spawning a subprocess.
+func run(args []string, stdout, stderr io.Writer) int {
+	if len(args) < 2 {
+		printUsage(stderr)
+		return 1
 	}
 
 	if err := sheet.EnsureDir(); err != nil {
-		die("failed to create sheets directory: %v", err)
+		return runtimeError(stderr, "failed to create sheets directory: %v", err)
 	}
 
-	switch os.Args[1] {
+	switch args[1] {
 	case "--edit", "-e":
-		if err := sheet.Edit(requireOperand("she --edit, -e <tool>")); err != nil {
-			die("edit failed: %v", err)
+		name, code := requireOperand(args, stderr, "she --edit, -e <tool>")
+		if code != 0 {
+			return code
+		}
+		if err := sheet.Edit(name); err != nil {
+			return runtimeError(stderr, "edit failed: %v", err)
 		}
 
 	case "--new", "-n":
-		if err := sheet.New(requireOperand("she --new, -n <tool>")); err != nil {
-			die("new failed: %v", err)
+		name, code := requireOperand(args, stderr, "she --new, -n <tool>")
+		if code != 0 {
+			return code
+		}
+		if err := sheet.New(name); err != nil {
+			return runtimeError(stderr, "new failed: %v", err)
 		}
 
 	case "--list", "-l":
 		if err := sheet.List(); err != nil {
-			die("list failed: %v", err)
+			return runtimeError(stderr, "list failed: %v", err)
 		}
 
 	case "--sync", "-s":
-		if err := sheet.Sync(optionalOperand()); err != nil {
-			die("sync failed: %v", err)
+		repo, code := optionalOperand(args, stderr)
+		if code != 0 {
+			return code
+		}
+		if err := sheet.Sync(repo); err != nil {
+			return runtimeError(stderr, "sync failed: %v", err)
 		}
 
 	case "--help", "-h":
-		printUsage()
+		printUsage(stdout)
 
 	// "--" ends option parsing, so the next argument is taken literally —
 	// the only way to view a sheet whose name begins with a dash.
 	case "--":
-		viewSheet(requireOperand("she -- <tool>"))
+		name, code := requireOperand(args, stderr, "she -- <tool>")
+		if code != 0 {
+			return code
+		}
+		return viewSheet(name, stdout, stderr)
 
 	default:
-		name := os.Args[1]
+		name := args[1]
 		if strings.HasPrefix(name, "-") {
-			dieUsage("unknown flag: %s", name)
+			return usageError(stderr, "unknown flag: %s", name)
 		}
-		viewSheet(name)
+		return viewSheet(name, stdout, stderr)
 	}
+
+	return 0
 }
 
-// viewSheet renders the named sheet to standard output, or reports that no
-// such sheet exists. An empty name is treated as a usage error.
-func viewSheet(name string) {
+// viewSheet reports on stdout whether the named sheet exists and returns the
+// process exit code. The rendered sheet itself is written by sheet.View
+// directly to os.Stdout, not through the stdout argument.
+func viewSheet(name string, stdout, stderr io.Writer) int {
 	if name == "" {
-		dieUsage("usage: she <tool>")
+		return usageError(stderr, "usage: she <tool>")
 	}
 
 	if !sheet.Exists(name) {
-		fmt.Printf("No cheat sheet found for '%s'.\n", name)
-		fmt.Println("Run 'she --edit " + name + "' to create one.")
-		return
+		fmt.Fprintf(stdout, "No cheat sheet found for '%s'.\n", name)
+		fmt.Fprintf(stdout, "Run 'she --edit %s' to create one.\n", name)
+		return 0
 	}
 
 	path, err := sheet.Path(name)
 	if err != nil {
-		die("failed to resolve sheet path: %v", err)
+		return runtimeError(stderr, "failed to resolve sheet path: %v", err)
 	}
 	if err := sheet.View(path); err != nil {
-		die("failed to view sheet: %v", err)
+		return runtimeError(stderr, "failed to view sheet: %v", err)
 	}
+	return 0
 }
 
-// requireOperand returns the command operand (os.Args[2]), exiting with a
-// usage error if it is missing. usage is the one-line invocation summary
-// shown to the user.
-func requireOperand(usage string) string {
-	if len(os.Args) < 3 {
-		dieUsage("usage: %s", usage)
+// requireOperand returns args[2], the operand for a command that requires one.
+// A missing operand is reported as a usage error and the returned exit code is
+// non-zero for the caller to propagate.
+func requireOperand(args []string, stderr io.Writer, usage string) (string, int) {
+	if len(args) < 3 {
+		return "", usageError(stderr, "usage: %s", usage)
 	}
-	return os.Args[2]
+	return args[2], 0
 }
 
-// optionalOperand returns the command operand (os.Args[2]) if present, or
-// the empty string otherwise. It is for commands whose operand is optional,
-// such as --sync.
-func optionalOperand() string {
-	if len(os.Args) < 3 {
-		return ""
+// optionalOperand returns args[2] for a command whose operand is optional,
+// such as --sync. An absent operand yields "" with a zero exit code. An
+// operand that looks like a flag is rejected as a usage error — it almost
+// certainly means the command was fat-fingered, e.g. `she --sync --help`.
+func optionalOperand(args []string, stderr io.Writer) (string, int) {
+	if len(args) < 3 {
+		return "", 0
 	}
-	return os.Args[2]
+	operand := args[2]
+	if strings.HasPrefix(operand, "-") {
+		return "", usageError(stderr, "unknown flag: %s", operand)
+	}
+	return operand, 0
 }
 
-func printUsage() {
-	fmt.Println(`she - cheat sheet manager
+func printUsage(w io.Writer) {
+	fmt.Fprintln(w, `she - cheat sheet manager
 
 Usage:
   she <tool>		View cheat sheet
@@ -119,16 +153,16 @@ Examples:
   she --sync		Sync sheets`)
 }
 
-// die reports a runtime failure on standard error and exits with status 1.
-func die(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, format+"\n", args...)
-	os.Exit(1)
+// runtimeError reports a runtime failure on stderr and returns exit code 1.
+func runtimeError(stderr io.Writer, format string, args ...any) int {
+	fmt.Fprintf(stderr, format+"\n", args...)
+	return 1
 }
 
-// dieUsage reports a command-line usage error on standard error and exits
-// with status 2, the conventional exit code for incorrect invocation.
-func dieUsage(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, format+"\n", args...)
-	fmt.Fprintln(os.Stderr, "Run 'she --help' for more information.")
-	os.Exit(2)
+// usageError reports a command-line usage error on stderr and returns exit
+// code 2, the conventional code for incorrect invocation.
+func usageError(stderr io.Writer, format string, args ...any) int {
+	fmt.Fprintf(stderr, format+"\n", args...)
+	fmt.Fprintln(stderr, "Run 'she --help' for more information.")
+	return 2
 }
