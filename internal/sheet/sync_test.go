@@ -53,7 +53,7 @@ func silenceOutput(t *testing.T) {
 	os.Stdout, os.Stderr = devnull, devnull
 	t.Cleanup(func() {
 		os.Stdout, os.Stderr = origOut, origErr
-		devnull.Close()
+		_ = devnull.Close()
 	})
 }
 

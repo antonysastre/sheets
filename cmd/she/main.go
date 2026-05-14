@@ -94,8 +94,8 @@ func viewSheet(name string, stdout, stderr io.Writer) int {
 	}
 
 	if !sheet.Exists(name) {
-		fmt.Fprintf(stdout, "No cheat sheet found for '%s'.\n", name)
-		fmt.Fprintf(stdout, "Run 'she --edit %s' to create one.\n", name)
+		_, _ = fmt.Fprintf(stdout, "No cheat sheet found for '%s'.\n", name)
+		_, _ = fmt.Fprintf(stdout, "Run 'she --edit %s' to create one.\n", name)
 		return 0
 	}
 
@@ -135,7 +135,7 @@ func optionalOperand(args []string, stderr io.Writer) (string, int) {
 }
 
 func printUsage(w io.Writer) {
-	fmt.Fprintln(w, `she - cheat sheet manager
+	_, _ = fmt.Fprintln(w, `she - cheat sheet manager
 
 Usage:
   she <tool>		View cheat sheet
@@ -155,14 +155,14 @@ Examples:
 
 // runtimeError reports a runtime failure on stderr and returns exit code 1.
 func runtimeError(stderr io.Writer, format string, args ...any) int {
-	fmt.Fprintf(stderr, format+"\n", args...)
+	_, _ = fmt.Fprintf(stderr, format+"\n", args...)
 	return 1
 }
 
 // usageError reports a command-line usage error on stderr and returns exit
 // code 2, the conventional code for incorrect invocation.
 func usageError(stderr io.Writer, format string, args ...any) int {
-	fmt.Fprintf(stderr, format+"\n", args...)
-	fmt.Fprintln(stderr, "Run 'she --help' for more information.")
+	_, _ = fmt.Fprintf(stderr, format+"\n", args...)
+	_, _ = fmt.Fprintln(stderr, "Run 'she --help' for more information.")
 	return 2
 }
