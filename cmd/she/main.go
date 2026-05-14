@@ -36,6 +36,11 @@ func main() {
 			die("list failed: %v", err)
 		}
 
+	case "--sync", "-s":
+		if err := sheet.Sync(optionalOperand()); err != nil {
+			die("sync failed: %v", err)
+		}
+
 	case "--help", "-h":
 		printUsage()
 
@@ -85,6 +90,16 @@ func requireOperand(usage string) string {
 	return os.Args[2]
 }
 
+// optionalOperand returns the command operand (os.Args[2]) if present, or
+// the empty string otherwise. It is for commands whose operand is optional,
+// such as --sync.
+func optionalOperand() string {
+	if len(os.Args) < 3 {
+		return ""
+	}
+	return os.Args[2]
+}
+
 func printUsage() {
 	fmt.Println(`she - cheat sheet manager
 
@@ -93,12 +108,15 @@ Usage:
   she --list, -l	List all cheat sheets
   she --edit, -e <tool>	Edit cheat sheet (creates if missing)
   she --new, -n <tool>	Create new cheat sheet
+  she --sync, -s [repo]	Sync sheets to a git repo (pass repo to set up)
   she --help, -h	Show this help
 
 Examples:
   she docker		View docker sheet
   she --edit docker	Edit docker sheet
-  she --list		Show all sheets`)
+  she --list		Show all sheets
+  she --sync git@github.com:me/sheets.git	Set up syncing
+  she --sync		Sync sheets`)
 }
 
 // die reports a runtime failure on standard error and exits with status 1.
