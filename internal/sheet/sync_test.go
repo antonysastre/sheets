@@ -1,9 +1,10 @@
 package sheet
 
-// These are integration tests: they drive Sync against a real git binary and
-// a real (but local, hence hermetic) bare repository standing in for the
-// central remote. No network is involved. They are skipped under `go test
-// -short` and when git is not on PATH.
+// Most tests here are integration tests: they drive Sync against a real git
+// binary and a real (but local, hence hermetic) bare repository standing in
+// for the central remote. No network is involved. They are skipped under `go
+// test -short` and when git is not on PATH. TestParseMarker is the exception
+// — a pure unit test that always runs.
 
 import (
 	"os"
@@ -496,5 +497,112 @@ func TestSyncRunRejectsIdentityMismatch(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "mismatched repositories") {
 		t.Errorf("error %q is not the expected identity-mismatch error", err)
+	}
+}
+
+// TestSyncSetupMergeConflict covers a genuine sheet conflict during setup: two
+// machines independently created the same sheet with different content. Setup
+// must fail clearly and leave the merge in place for the user to resolve.
+func TestSyncSetupMergeConflict(t *testing.T) {
+	requireGit(t)
+	gitEnv(t)
+	silenceOutput(t)
+
+	central := newCentralRepo(t)
+	a := newLaptop(t, "laptopA")
+	b := newLaptop(t, "laptopB")
+
+	// Laptop A establishes the repo with a "git" sheet.
+	a.writeSheet(t, "git", "git status > A's version\n")
+	if err := a.sync(t, central); err != nil {
+		t.Fatalf("laptop A setup: %v", err)
+	}
+
+	// Laptop B has its own "git" sheet with different content.
+	b.writeSheet(t, "git", "git status > B's version\n")
+	err := b.sync(t, central)
+	if err == nil {
+		t.Fatal("setup with a conflicting sheet: expected an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "the same sheet differs") {
+		t.Errorf("error %q is not the expected setup-conflict error", err)
+	}
+	// The conflicted merge must be left in place for the user to resolve.
+	if _, statErr := os.Stat(filepath.Join(b.sheets, ".git", "MERGE_HEAD")); statErr != nil {
+		t.Errorf("expected an unresolved merge in %s/.git for the user to resolve", b.sheets)
+	}
+}
+
+// TestSyncSetupRejectsDifferentRepoOnRerun covers re-running setup against a
+// different sheets repository than the one ~/.sheets is already bound to. The
+// marker ids differ, so setup must refuse, abort the merge, and restore the
+// original remote.
+func TestSyncSetupRejectsDifferentRepoOnRerun(t *testing.T) {
+	requireGit(t)
+	gitEnv(t)
+	silenceOutput(t)
+
+	repoA := newCentralRepo(t)
+	repoB := newCentralRepo(t)
+
+	// One laptop establishes repoA.
+	a := newLaptop(t, "laptopA")
+	a.writeSheet(t, "git", "git status > show tree\n")
+	if err := a.sync(t, repoA); err != nil {
+		t.Fatalf("laptop A setup: %v", err)
+	}
+
+	// Another laptop establishes repoB — a distinct sheets repo with its own
+	// marker id.
+	b := newLaptop(t, "laptopB")
+	b.writeSheet(t, "docker", "docker ps > list containers\n")
+	if err := b.sync(t, repoB); err != nil {
+		t.Fatalf("laptop B setup: %v", err)
+	}
+
+	// Re-running B's setup against repoA must be refused: different identity.
+	err := b.sync(t, repoA)
+	if err == nil {
+		t.Fatal("setup re-pointed at a different sheets repo: expected an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "different sheets repositories") {
+		t.Errorf("error %q is not the expected marker-mismatch error", err)
+	}
+	// The original remote must have been restored by the rollback.
+	if got := mustGit(t, b.sheets, "remote", "get-url", "origin"); got != repoB {
+		t.Errorf("origin = %q after rejection, want it restored to %q", got, repoB)
+	}
+	// No half-finished merge left behind.
+	if _, statErr := os.Stat(filepath.Join(b.sheets, ".git", "MERGE_HEAD")); !os.IsNotExist(statErr) {
+		t.Errorf("expected the merge to be aborted, but MERGE_HEAD remains in %s/.git", b.sheets)
+	}
+}
+
+// TestParseMarker checks marker parsing in isolation, without any git.
+func TestParseMarker(t *testing.T) {
+	const goodID = "ab0a7fdface20d8549d02fe4c90f16a7dd33b7f3586ea152229c1b53dc1f29ac"
+	tests := []struct {
+		name    string
+		content string
+		wantID  string
+		wantOK  bool
+	}{
+		{"well-formed", markerBody(goodID), goodID, true},
+		{"extra whitespace tolerated", "  " + markerSignature + " \n id:  " + goodID + "  \n", goodID, true},
+		{"last id wins", markerSignature + "\nid: " + strings.Repeat("a", 64) + "\nid: " + goodID + "\n", goodID, true},
+		{"missing signature", "version: 1\nid: " + goodID + "\n", "", false},
+		{"missing id", markerSignature + "\nversion: 1\n", "", false},
+		{"id too short", markerSignature + "\nid: abc123\n", "", false},
+		{"id not hex", markerSignature + "\nid: " + strings.Repeat("z", 64) + "\n", "", false},
+		{"empty", "", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			id, ok := parseMarker(tt.content)
+			if id != tt.wantID || ok != tt.wantOK {
+				t.Errorf("parseMarker(%q) = (%q, %v), want (%q, %v)",
+					tt.content, id, ok, tt.wantID, tt.wantOK)
+			}
+		})
 	}
 }

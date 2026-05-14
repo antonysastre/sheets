@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -22,9 +24,16 @@ const (
 	markerName = ".shetag"
 	// markerSignature is the first line of the marker file.
 	markerSignature = "# she sheets repository"
-	// markerVersion is the current marker format version.
+	// markerVersion is the current marker format version. It is written into
+	// new markers but not yet enforced on read — an older binary will happily
+	// parse a newer marker. Bump it and add a check in parseMarker if the
+	// format ever gains a required field.
 	markerVersion = 1
 )
+
+// credentialURL matches the userinfo (user[:password]) of a URL, which can
+// carry a token or password that must not leak into error messages or logs.
+var credentialURL = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*://)[^/@\s]+@`)
 
 // Sync synchronises the local sheets with a central git repository.
 //
@@ -58,10 +67,14 @@ func Sync(repo string) error {
 // Before merging anything it guards against repo being an unrelated project:
 // a remote that already has history must carry a she marker file, otherwise
 // setup would graft that project into ~/.sheets and push the sheets onto its
-// branch. On rejection the half-wired repository is rolled back.
+// branch. On rejection or early failure the half-wired repository is rolled
+// back.
 func syncSetup(dir, repo string) error {
 	createdGit := false
 	previousURL := ""
+	// displayRepo is repo with any embedded credentials masked; use it for
+	// every status message and error, never the raw repo.
+	displayRepo := redactURL(repo)
 
 	if isGitRepo(dir) {
 		if url, err := runGit(dir, "remote", "get-url", "origin"); err == nil {
@@ -72,7 +85,7 @@ func syncSetup(dir, repo string) error {
 		} else if _, err := runGit(dir, "remote", "add", "origin", repo); err != nil {
 			return err
 		}
-		fmt.Printf("Updated sync remote to %s\n", repo)
+		fmt.Fprintf(os.Stderr, "Updated sync remote to %s\n", displayRepo)
 	} else {
 		if _, err := runGit(dir, "init", "-b", syncBranch); err != nil {
 			return err
@@ -81,11 +94,11 @@ func syncSetup(dir, repo string) error {
 		if _, err := runGit(dir, "remote", "add", "origin", repo); err != nil {
 			return err
 		}
-		fmt.Printf("Initialised sync repository in %s\n", dir)
+		fmt.Fprintf(os.Stderr, "Initialised sync repository in %s\n", dir)
 	}
 
-	// rollback undoes the repository changes made above, so a rejected setup
-	// does not leave ~/.sheets half-wired to the wrong remote.
+	// rollback undoes the repository changes made above, so a rejected or
+	// failed setup does not leave ~/.sheets half-wired to the wrong remote.
 	rollback := func() {
 		if createdGit {
 			_ = os.RemoveAll(filepath.Join(dir, ".git"))
@@ -96,7 +109,7 @@ func syncSetup(dir, repo string) error {
 		}
 	}
 
-	fmt.Println("Fetching remote sheets...")
+	fmt.Fprintln(os.Stderr, "Fetching remote sheets...")
 	if err := streamGit(dir, "fetch", "origin"); err != nil {
 		rollback()
 		return err
@@ -116,7 +129,7 @@ func syncSetup(dir, repo string) error {
 			return fmt.Errorf("the remote %s is not a she sheets repository "+
 				"(no %s marker) — point --sync at a dedicated, empty repository; "+
 				"or, if it really is your sheets repo, add a %s marker to it and retry",
-				repo, markerName, markerName)
+				displayRepo, markerName, markerName)
 		}
 	} else {
 		// The remote is empty: we are establishing it. Make sure ~/.sheets
@@ -128,6 +141,7 @@ func syncSetup(dir, repo string) error {
 	}
 
 	if _, err := commitLocal(dir, "Add sheets from "+hostname()); err != nil {
+		rollback()
 		return err
 	}
 
@@ -137,27 +151,42 @@ func syncSetup(dir, repo string) error {
 		// repo brings its marker in through this merge.
 		if _, err := runGit(dir, "merge", "origin/"+syncBranch,
 			"--allow-unrelated-histories", "-m", "Merge remote sheets"); err != nil {
-			return fmt.Errorf("the same sheet differs on both ends — "+
-				"resolve the conflict in %s, then run 'she --sync': %w", dir, err)
+			conflicts, _ := runGit(dir, "diff", "--name-only", "--diff-filter=U")
+			if slices.Contains(strings.Split(conflicts, "\n"), markerName) {
+				// The marker itself conflicts: the two repositories have
+				// different identities. There is nothing to resolve by hand.
+				_, _ = runGit(dir, "merge", "--abort")
+				rollback()
+				return fmt.Errorf("%s and %s are different sheets repositories "+
+					"(marker id mismatch) — point --sync at the correct repository",
+					dir, displayRepo)
+			}
+			// A genuine sheet conflict: leave the merge in place so the user
+			// can resolve it, then re-run 'she --sync'.
+			return fmt.Errorf("the same sheet differs between %s and the remote — "+
+				"resolve the conflict there, then run 'she --sync': %w", dir, err)
 		}
 	case remoteBranchExists(dir, syncBranch):
 		// No local history yet: adopt the remote branch as-is.
 		if _, err := runGit(dir, "checkout", "-B", syncBranch, "origin/"+syncBranch); err != nil {
+			rollback()
 			return err
 		}
 	}
 
 	if !hasCommits(dir) {
-		fmt.Println("Sync configured. Add sheets with 'she --new <tool>', then run 'she --sync'.")
+		fmt.Fprintln(os.Stderr, "Sync configured. Add sheets with 'she --new <tool>', then run 'she --sync'.")
 		return nil
 	}
 
-	fmt.Println("Pushing...")
+	fmt.Fprintln(os.Stderr, "Pushing...")
 	if err := streamGit(dir, "push", "-u", "origin", syncBranch); err != nil {
+		// Not rolled back: the local repository is valid and fully committed;
+		// the user can simply re-run 'she --sync' to retry the push.
 		return err
 	}
 
-	fmt.Println("Sync configured. Run 'she --sync' to sync from now on.")
+	fmt.Fprintln(os.Stderr, "Sync configured. Run 'she --sync' to sync from now on.")
 	return nil
 }
 
@@ -179,12 +208,12 @@ func syncRun(dir string) error {
 		return err
 	}
 	if committed {
-		fmt.Println("Committed local changes.")
+		fmt.Fprintln(os.Stderr, "Committed local changes.")
 	} else {
-		fmt.Println("No local changes to commit.")
+		fmt.Fprintln(os.Stderr, "No local changes to commit.")
 	}
 
-	fmt.Println("Fetching remote sheets...")
+	fmt.Fprintln(os.Stderr, "Fetching remote sheets...")
 	if err := streamGit(dir, "fetch", "origin"); err != nil {
 		return err
 	}
@@ -214,16 +243,16 @@ func syncRun(dir string) error {
 	}
 
 	if !hasCommits(dir) {
-		fmt.Println("No sheets to sync yet.")
+		fmt.Fprintln(os.Stderr, "No sheets to sync yet.")
 		return nil
 	}
 
-	fmt.Println("Pushing...")
+	fmt.Fprintln(os.Stderr, "Pushing...")
 	if err := streamGit(dir, "push", "-u", "origin", syncBranch); err != nil {
 		return err
 	}
 
-	fmt.Println("Sheets synced.")
+	fmt.Fprintln(os.Stderr, "Sheets synced.")
 	return nil
 }
 
@@ -344,14 +373,23 @@ func localMarkerID(dir string) (id string, present bool) {
 }
 
 // remoteMarkerID returns the repository id recorded in the marker file on the
-// fetched remote branch. present is false (with a nil error) when the remote
-// branch carries no marker file; a non-nil error indicates git itself failed.
+// fetched remote branch. present reports whether a marker file exists there at
+// all; a non-nil error means git itself failed and the caller must not treat
+// the marker as simply absent.
 func remoteMarkerID(dir string) (id string, present bool, err error) {
-	out, gerr := runGit(dir, "show", "origin/"+syncBranch+":"+markerName)
-	if gerr != nil {
-		// git exits non-zero when the path does not exist on that branch;
-		// treat that as "no marker" rather than a hard failure.
+	// git ls-tree exits zero whether or not the path exists — it just lists
+	// nothing when absent — so a non-zero exit is a genuine git failure
+	// rather than a missing marker.
+	listed, err := runGit(dir, "ls-tree", "origin/"+syncBranch, "--", markerName)
+	if err != nil {
+		return "", false, err
+	}
+	if listed == "" {
 		return "", false, nil
+	}
+	out, err := runGit(dir, "show", "origin/"+syncBranch+":"+markerName)
+	if err != nil {
+		return "", false, err
 	}
 	id, ok := parseMarker(out)
 	return id, ok, nil
@@ -406,23 +444,36 @@ func runGit(dir string, args ...string) (string, error) {
 			detail = strings.TrimSpace(stdout.String())
 		}
 		if detail != "" {
-			return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, detail)
+			return "", fmt.Errorf("git %s: %w: %s", redactArgs(args), err, detail)
 		}
-		return "", fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
+		return "", fmt.Errorf("git %s: %w", redactArgs(args), err)
 	}
 	return strings.TrimSpace(stdout.String()), nil
 }
 
-// streamGit runs a git command in dir with the standard streams attached, so
-// progress is visible and credential prompts work. It is used for the network
-// operations, fetch and push.
+// streamGit runs a git command in dir for the network operations, fetch and
+// push. git's own output goes to stderr — where git writes progress anyway —
+// so it never pollutes she's stdout; stdin stays attached so credential
+// prompts still work.
 func streamGit(dir string, args ...string) error {
 	cmd := gitCmd(dir, args...)
 	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
+	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
+		return fmt.Errorf("git %s: %w", redactArgs(args), err)
 	}
 	return nil
+}
+
+// redactURL masks any credentials embedded in a URL, so a token or password
+// passed in a remote URL never reaches a status message, an error, or a log.
+func redactURL(url string) string {
+	return credentialURL.ReplaceAllString(url, "${1}***@")
+}
+
+// redactArgs joins git arguments for display in an error message, with the
+// same credential masking applied.
+func redactArgs(args []string) string {
+	return redactURL(strings.Join(args, " "))
 }

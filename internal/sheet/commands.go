@@ -114,9 +114,9 @@ func Edit(name string) error {
 	}
 
 	if exists {
-		fmt.Printf("Editing: %s\n", name)
+		fmt.Fprintf(os.Stderr, "Editing: %s\n", name)
 	} else {
-		fmt.Printf("Created: %s\n", name)
+		fmt.Fprintf(os.Stderr, "Created: %s\n", name)
 	}
 
 	cmd := exec.Command(editor(), path)
@@ -177,7 +177,7 @@ func New(name string) error {
 		return fmt.Errorf("create sheet: %w", err)
 	}
 
-	fmt.Printf("Created: %s\n", name)
+	fmt.Fprintf(os.Stderr, "Created: %s\n", name)
 
 	cmd := exec.Command(editor(), path)
 	cmd.Stdin = os.Stdin
