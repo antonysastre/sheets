@@ -415,10 +415,10 @@ func TestSyncSetupRejectsForeignRepo(t *testing.T) {
 
 	err := a.sync(t, central)
 	if err == nil {
-		t.Fatal("setup against a foreign repo: expected an error, got nil")
+		t.Fatal("setup against a non-empty repo: expected an error, got nil")
 	}
-	if !strings.Contains(err.Error(), "not a she sheets repository") {
-		t.Errorf("error %q is not the expected foreign-repo rejection", err)
+	if !strings.Contains(err.Error(), "only initialises an empty repository") {
+		t.Errorf("error %q is not the expected non-empty-remote rejection", err)
 	}
 	// The half-initialised repository must have been rolled back...
 	if _, statErr := os.Stat(filepath.Join(a.sheets, ".git")); !os.IsNotExist(statErr) {
@@ -588,12 +588,12 @@ func TestParseMarker(t *testing.T) {
 		wantOK  bool
 	}{
 		{"well-formed", markerBody(goodID), goodID, true},
-		{"extra whitespace tolerated", "  " + markerSignature + " \n id:  " + goodID + "  \n", goodID, true},
-		{"last id wins", markerSignature + "\nid: " + strings.Repeat("a", 64) + "\nid: " + goodID + "\n", goodID, true},
-		{"missing signature", "version: 1\nid: " + goodID + "\n", "", false},
-		{"missing id", markerSignature + "\nversion: 1\n", "", false},
-		{"id too short", markerSignature + "\nid: abc123\n", "", false},
-		{"id not hex", markerSignature + "\nid: " + strings.Repeat("z", 64) + "\n", "", false},
+		{"id only", "id: " + goodID + "\n", goodID, true},
+		{"extra whitespace tolerated", "  id:  " + goodID + "  \n", goodID, true},
+		{"last id wins", "id: " + strings.Repeat("a", 64) + "\nid: " + goodID + "\n", goodID, true},
+		{"missing id", "version: 1\n", "", false},
+		{"id too short", "id: abc123\n", "", false},
+		{"id not hex", "id: " + strings.Repeat("z", 64) + "\n", "", false},
 		{"empty", "", "", false},
 	}
 	for _, tt := range tests {

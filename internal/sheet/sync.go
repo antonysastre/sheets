@@ -22,8 +22,6 @@ const (
 	// markerName is the file she writes at the root of a sheets repository to
 	// identify it as one. It is a dotfile, so sheet.List ignores it.
 	markerName = ".shetag"
-	// markerSignature is the first line of the marker file.
-	markerSignature = "# she sheets repository"
 	// markerVersion is the current marker format version. It is written into
 	// new markers but not yet enforced on read — an older binary will happily
 	// parse a newer marker. Bump it and add a check in parseMarker if the
@@ -128,10 +126,11 @@ func syncSetup(dir, repo string) error {
 		}
 		if !present {
 			rollback()
-			return fmt.Errorf("the remote %s is not a she sheets repository "+
-				"(no %s marker) — point --sync at a dedicated, empty repository; "+
-				"or, if it really is your sheets repo, add a %s marker to it and retry",
-				displayRepo, markerName, markerName)
+			return fmt.Errorf("the remote %s has commits but no %s marker — "+
+				"'she --sync' only initialises an empty repository. Create the "+
+				"repo with no README, license, or .gitignore, then retry; no "+
+				"changes were made to %s",
+				displayRepo, markerName, dir)
 		}
 	} else {
 		// The remote is empty: we are establishing it. Make sure ~/.sheets
@@ -311,7 +310,7 @@ func newRepoID() (string, error) {
 
 // markerBody returns the contents of a marker file for the given id.
 func markerBody(id string) string {
-	return fmt.Sprintf("%s\nversion: %d\nid: %s\n", markerSignature, markerVersion, id)
+	return fmt.Sprintf("version: %d\nid: %s\n", markerVersion, id)
 }
 
 // writeMarker writes the marker file for id into dir.
@@ -323,19 +322,15 @@ func writeMarker(dir, id string) error {
 }
 
 // parseMarker extracts the repository id from marker file content. ok is true
-// only when the content carries the she signature line and a well-formed id.
+// only when the content carries a well-formed id.
 func parseMarker(content string) (id string, ok bool) {
-	hasSignature := false
 	for _, line := range strings.Split(content, "\n") {
 		line = strings.TrimSpace(line)
-		switch {
-		case line == markerSignature:
-			hasSignature = true
-		case strings.HasPrefix(line, "id:"):
+		if strings.HasPrefix(line, "id:") {
 			id = strings.TrimSpace(strings.TrimPrefix(line, "id:"))
 		}
 	}
-	if !hasSignature || !isRepoID(id) {
+	if !isRepoID(id) {
 		return "", false
 	}
 	return id, true
