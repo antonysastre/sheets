@@ -76,9 +76,9 @@ Lines starting with `//` are ignored.
 
 ## Configuration
 
-Set your preferred editor:
+Set your preferred editor (VISUAL takes precedence over EDITOR, per Unix convention):
 ```bash
-export EDITOR=vim  # or VISUAL
+export VISUAL=vim  # or EDITOR
 ```
 
 Sheets are stored in `~/.sheets/`.

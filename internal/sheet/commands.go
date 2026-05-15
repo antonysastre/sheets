@@ -183,11 +183,13 @@ func New(name string) error {
 	return cmd.Run()
 }
 
+// editor resolves the user's preferred editor, following the long-standing
+// Unix convention of consulting VISUAL before EDITOR.
 func editor() string {
-	if e := os.Getenv("EDITOR"); e != "" {
+	if e := os.Getenv("VISUAL"); e != "" {
 		return e
 	}
-	if e := os.Getenv("VISUAL"); e != "" {
+	if e := os.Getenv("EDITOR"); e != "" {
 		return e
 	}
 	return defaultEditor
