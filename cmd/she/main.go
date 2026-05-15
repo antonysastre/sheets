@@ -49,7 +49,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 
 	case "--list", "-l":
-		if err := sheet.List(); err != nil {
+		if err := sheet.List(stdout); err != nil {
 			return runtimeError(stderr, "list failed: %v", err)
 		}
 
