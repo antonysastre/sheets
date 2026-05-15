@@ -3,7 +3,7 @@
 cmd/she/she
 
 # Build
- dist/
+dist/
 *.test
 coverage.txt
 
