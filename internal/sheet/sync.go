@@ -14,32 +14,20 @@ import (
 	"strings"
 )
 
-// syncBranch is the branch used for the central sheets repository. The
-// repository passed to 'she --sync <repo>' is expected to use this branch.
+// syncBranch is the branch used for the central sheets repository.
 const syncBranch = "main"
 
 const (
-	// markerName is the file she writes at the root of a sheets repository to
-	// identify it as one. It is a dotfile, so sheet.List ignores it.
 	markerName = ".shetag"
-	// markerVersion is the current marker format version. It is written into
-	// new markers but not yet enforced on read — an older binary will happily
-	// parse a newer marker. Bump it and add a check in parseMarker if the
-	// format ever gains a required field.
+	// markerVersion is written into new markers; parseMarker does not enforce it yet.
 	markerVersion = 1
 )
 
-// credentialURL matches the userinfo (user[:password]) of a URL, which can
-// carry a token or password that must not leak into error messages or logs.
+// credentialURL matches a URL's userinfo, which may carry a token or password.
 var credentialURL = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*://)[^/@\s]+@`)
 
-// Sync synchronises the local sheets with a central git repository.
-//
-// Called with a non-empty repo it performs first-time setup: it turns the
-// sheets directory into a git repository, points it at repo, and performs an
-// initial exchange so both ends share a common history. Called with an empty
-// repo it runs the routine sync: commit local changes, fetch and rebase onto
-// the remote, then push.
+// Sync synchronises ~/.sheets with a central git repository. Pass a non-empty
+// repo for first-time setup; pass "" for a routine commit-fetch-rebase-push cycle.
 func Sync(repo string) error {
 	if err := EnsureDir(); err != nil {
 		return fmt.Errorf("create sheets directory: %w", err)
@@ -58,20 +46,13 @@ func Sync(repo string) error {
 	return syncRun(dir)
 }
 
-// syncSetup wires the sheets directory up to repo and performs the first
-// exchange so the local sheets and any already on the remote are merged into
-// a single shared history.
-//
-// Before merging anything it guards against repo being an unrelated project:
-// a remote that already has history must carry a she marker file, otherwise
-// setup would graft that project into ~/.sheets and push the sheets onto its
-// branch. On rejection or early failure the half-wired repository is rolled
-// back.
+// syncSetup wires ~/.sheets up to repo and performs the first exchange. A remote
+// that already has history must carry a marker, else it may be an unrelated
+// project; rejection rolls back the half-wired repo.
 func syncSetup(dir, repo string) error {
 	createdGit := false
 	previousURL := ""
-	// displayRepo is repo with any embedded credentials masked; use it for
-	// every status message and error, never the raw repo.
+	// displayRepo masks any URL credentials; use it for all user-facing output.
 	displayRepo := redactURL(repo)
 
 	if isGitRepo(dir) {
@@ -95,8 +76,7 @@ func syncSetup(dir, repo string) error {
 		fmt.Fprintf(os.Stderr, "Initialised sync repository in %s\n", dir)
 	}
 
-	// rollback undoes the repository changes made above, so a rejected or
-	// failed setup does not leave ~/.sheets half-wired to the wrong remote.
+	// rollback undoes the changes above on rejection or failure.
 	rollback := func() {
 		if createdGit {
 			_ = os.RemoveAll(filepath.Join(dir, ".git"))
@@ -116,9 +96,7 @@ func syncSetup(dir, repo string) error {
 	}
 
 	if remoteBranchExists(dir, syncBranch) {
-		// The remote already has history: it must be a she sheets repository,
-		// not some unrelated project we would otherwise merge into ~/.sheets
-		// and then push our sheets onto.
+		// Remote has history: established sheets repo if marker present, else refuse.
 		_, present, err := remoteMarkerID(dir)
 		if err != nil {
 			rollback()
@@ -133,8 +111,7 @@ func syncSetup(dir, repo string) error {
 				displayRepo, markerName, dir)
 		}
 	} else {
-		// The remote is empty: we are establishing it. Make sure ~/.sheets
-		// carries a marker so the repository has an identity from the start.
+		// Empty remote: establish it with a fresh marker.
 		if err := ensureLocalMarker(dir); err != nil {
 			rollback()
 			return err
@@ -148,22 +125,19 @@ func syncSetup(dir, repo string) error {
 
 	switch {
 	case remoteBranchExists(dir, syncBranch) && hasCommits(dir):
-		// Both ends have history: stitch them together. An established sheets
-		// repo brings its marker in through this merge.
+		// Both ends have history: stitch them together.
 		if _, err := runGit(dir, "merge", "origin/"+syncBranch,
 			"--allow-unrelated-histories", "-m", "Merge remote sheets"); err != nil {
 			conflicts, _ := runGit(dir, "diff", "--name-only", "--diff-filter=U")
 			if slices.Contains(strings.Split(conflicts, "\n"), markerName) {
-				// The marker itself conflicts: the two repositories have
-				// different identities. There is nothing to resolve by hand.
+				// Marker conflict: different repo identities — nothing to resolve by hand.
 				_, _ = runGit(dir, "merge", "--abort")
 				rollback()
 				return fmt.Errorf("%s and %s are different sheets repositories "+
 					"(marker id mismatch) — point --sync at the correct repository",
 					dir, displayRepo)
 			}
-			// A genuine sheet conflict: leave the merge in place so the user
-			// can resolve it, then re-run 'she --sync'.
+			// Sheet conflict: leave the merge for the user to resolve.
 			return fmt.Errorf("the same sheet differs between %s and the remote — "+
 				"resolve the conflict there, then run 'she --sync': %w", dir, err)
 		}
@@ -182,8 +156,7 @@ func syncSetup(dir, repo string) error {
 
 	fmt.Fprintln(os.Stderr, "Pushing...")
 	if err := streamGit(dir, "push", "-u", "origin", syncBranch); err != nil {
-		// Not rolled back: the local repository is valid and fully committed;
-		// the user can simply re-run 'she --sync' to retry the push.
+		// Not rolled back: the local repo is valid; re-run 'she --sync' to retry the push.
 		return err
 	}
 
@@ -191,11 +164,8 @@ func syncSetup(dir, repo string) error {
 	return nil
 }
 
-// syncRun performs the routine sync. The order is deliberate: commit local
-// changes first so the working tree is clean, then rebase onto the freshly
-// fetched remote so local work is replayed on top of everyone else's, then
-// push the result. This keeps history linear and conflict-free as long as no
-// two machines edit the same sheet between syncs.
+// syncRun is the routine sync: commit-fetch-rebase-push, in that order, so local
+// work replays cleanly on top of remote work.
 func syncRun(dir string) error {
 	if !isGitRepo(dir) {
 		return errors.New("syncing is not set up — run 'she --sync <repo>' first")
@@ -220,9 +190,7 @@ func syncRun(dir string) error {
 	}
 
 	if remoteBranchExists(dir, syncBranch) {
-		// Guard against ~/.sheets having been re-pointed at a different
-		// sheets repository: if both ends carry a marker and the ids differ,
-		// refuse rather than entangle two unrelated histories.
+		// Refuse if local and remote marker ids differ — re-pointed at a different repo.
 		localID, localOK := localMarkerID(dir)
 		remoteID, remoteOK, err := remoteMarkerID(dir)
 		if err != nil {
@@ -257,9 +225,8 @@ func syncRun(dir string) error {
 	return nil
 }
 
-// rebaseOntoRemote replays local commits on top of the fetched remote branch.
-// On conflict it aborts the rebase — leaving the local commit intact and the
-// working tree clean — and reports which sheets need manual resolution.
+// rebaseOntoRemote replays local commits onto the fetched remote branch. On
+// conflict it aborts cleanly and reports which sheets need manual resolution.
 func rebaseOntoRemote(dir string) error {
 	if _, err := runGit(dir, "rebase", "origin/"+syncBranch); err == nil {
 		return nil
@@ -280,9 +247,8 @@ func rebaseOntoRemote(dir string) error {
 		"  cd %s && git pull --rebase", list, dir)
 }
 
-// commitLocal stages every change in dir and commits it with msg. It reports
-// whether a commit was made; an unchanged working tree is not an error and
-// produces no commit.
+// commitLocal stages every change in dir and commits it. Reports whether a
+// commit was made; an unchanged tree is not an error.
 func commitLocal(dir, msg string) (bool, error) {
 	if _, err := runGit(dir, "add", "-A"); err != nil {
 		return false, err
@@ -297,9 +263,8 @@ func commitLocal(dir, msg string) (bool, error) {
 	return true, nil
 }
 
-// newRepoID returns a fresh random repository identifier: 32 bytes of
-// cryptographically random data, hex-encoded. It is an identity, not a hash
-// of anything — git already provides content integrity.
+// newRepoID returns a fresh 32-byte random repository identifier, hex-encoded.
+// It is an identity, not a hash — git already provides content integrity.
 func newRepoID() (string, error) {
 	var buf [32]byte
 	if _, err := rand.Read(buf[:]); err != nil {
@@ -321,8 +286,7 @@ func writeMarker(dir, id string) error {
 	return nil
 }
 
-// parseMarker extracts the repository id from marker file content. ok is true
-// only when the content carries a well-formed id.
+// parseMarker extracts the id from marker content; ok requires a well-formed id.
 func parseMarker(content string) (id string, ok bool) {
 	for _, line := range strings.Split(content, "\n") {
 		line = strings.TrimSpace(line)
@@ -345,9 +309,8 @@ func isRepoID(s string) bool {
 	return err == nil
 }
 
-// ensureLocalMarker writes a marker file with a fresh id into dir if one is
-// not already present. It is idempotent: an existing marker is left untouched
-// so a repository keeps its identity across re-runs of setup.
+// ensureLocalMarker writes a fresh marker into dir if one is not already
+// present. Idempotent: an existing marker keeps its identity.
 func ensureLocalMarker(dir string) error {
 	if _, present := localMarkerID(dir); present {
 		return nil
@@ -359,8 +322,7 @@ func ensureLocalMarker(dir string) error {
 	return writeMarker(dir, id)
 }
 
-// localMarkerID returns the repository id recorded in dir's working-tree
-// marker file, and whether a valid marker was found.
+// localMarkerID returns the repository id from dir's marker file, if valid.
 func localMarkerID(dir string) (id string, present bool) {
 	data, err := os.ReadFile(filepath.Join(dir, markerName))
 	if err != nil {
@@ -369,14 +331,10 @@ func localMarkerID(dir string) (id string, present bool) {
 	return parseMarker(string(data))
 }
 
-// remoteMarkerID returns the repository id recorded in the marker file on the
-// fetched remote branch. present reports whether a marker file exists there at
-// all; a non-nil error means git itself failed and the caller must not treat
-// the marker as simply absent.
+// remoteMarkerID returns the marker id on origin/<syncBranch>. present is false
+// when the marker is absent; err is non-nil only on a real git failure.
 func remoteMarkerID(dir string) (id string, present bool, err error) {
-	// git ls-tree exits zero whether or not the path exists — it just lists
-	// nothing when absent — so a non-zero exit is a genuine git failure
-	// rather than a missing marker.
+	// git ls-tree exits zero with empty output when the path is absent; non-zero is a real failure.
 	listed, err := runGit(dir, "ls-tree", "origin/"+syncBranch, "--", markerName)
 	if err != nil {
 		return "", false, err
@@ -403,16 +361,14 @@ func hasCommits(dir string) bool {
 	return gitCmd(dir, "rev-parse", "--verify", "--quiet", "HEAD").Run() == nil
 }
 
-// remoteBranchExists reports whether refs/remotes/origin/<branch> is present.
-// It inspects the ref populated by the preceding fetch, so it makes no
-// network call of its own.
+// remoteBranchExists checks the local refs/remotes/origin/<branch> populated
+// by the preceding fetch — no network call.
 func remoteBranchExists(dir, branch string) bool {
 	return gitCmd(dir, "rev-parse", "--verify", "--quiet",
 		"refs/remotes/origin/"+branch).Run() == nil
 }
 
-// hostname returns the machine's host name for use in sync commit messages,
-// falling back to a placeholder when it cannot be determined.
+// hostname returns the machine's host name for commit messages, with a fallback.
 func hostname() string {
 	h, err := os.Hostname()
 	if err != nil || h == "" {
@@ -428,8 +384,8 @@ func gitCmd(dir string, args ...string) *exec.Cmd {
 	return cmd
 }
 
-// runGit runs a git command in dir and returns its trimmed standard output.
-// On failure the returned error includes git's standard error.
+// runGit runs git in dir and returns its trimmed stdout; on failure the error
+// includes git's stderr.
 func runGit(dir string, args ...string) (string, error) {
 	var stdout, stderr bytes.Buffer
 	cmd := gitCmd(dir, args...)
@@ -448,10 +404,8 @@ func runGit(dir string, args ...string) (string, error) {
 	return strings.TrimSpace(stdout.String()), nil
 }
 
-// streamGit runs a git command in dir for the network operations, fetch and
-// push. git's own output goes to stderr — where git writes progress anyway —
-// so it never pollutes she's stdout; stdin stays attached so credential
-// prompts still work.
+// streamGit runs git for the network ops (fetch/push): output goes to stderr
+// to keep stdout clean; stdin stays attached for credential prompts.
 func streamGit(dir string, args ...string) error {
 	cmd := gitCmd(dir, args...)
 	cmd.Stdin = os.Stdin
@@ -463,14 +417,12 @@ func streamGit(dir string, args ...string) error {
 	return nil
 }
 
-// redactURL masks any credentials embedded in a URL, so a token or password
-// passed in a remote URL never reaches a status message, an error, or a log.
+// redactURL masks credentials embedded in a URL.
 func redactURL(url string) string {
 	return credentialURL.ReplaceAllString(url, "${1}***@")
 }
 
-// redactArgs joins git arguments for display in an error message, with the
-// same credential masking applied.
+// redactArgs joins git args for display, with credentials masked.
 func redactArgs(args []string) string {
 	return redactURL(strings.Join(args, " "))
 }

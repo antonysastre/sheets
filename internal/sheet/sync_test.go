@@ -1,10 +1,8 @@
 package sheet
 
-// Most tests here are integration tests: they drive Sync against a real git
-// binary and a real (but local, hence hermetic) bare repository standing in
-// for the central remote. No network is involved. They are skipped under `go
-// test -short` and when git is not on PATH. TestParseMarker is the exception
-// — a pure unit test that always runs.
+// Integration tests: drive Sync against real git and a local bare repo (no
+// network). Skipped under -short or when git is absent. TestParseMarker is a
+// pure unit test.
 
 import (
 	"os"
@@ -14,8 +12,7 @@ import (
 	"testing"
 )
 
-// requireGit skips the test unless a real git binary is available and we are
-// not running in -short mode.
+// requireGit skips the test under -short or when git is absent.
 func requireGit(t *testing.T) {
 	t.Helper()
 	if testing.Short() {
@@ -26,9 +23,7 @@ func requireGit(t *testing.T) {
 	}
 }
 
-// gitEnv makes git hermetic and deterministic for the duration of the test:
-// it ignores the developer's global and system config and supplies a fixed
-// identity, so commits succeed without depending on the host's setup.
+// gitEnv isolates git from the host's config and supplies a fixed identity.
 func gitEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
@@ -39,10 +34,8 @@ func gitEnv(t *testing.T) {
 	t.Setenv("GIT_COMMITTER_EMAIL", "test@example.com")
 }
 
-// silenceOutput redirects the process's standard streams to /dev/null for the
-// duration of the test, so Sync's progress output (and git's) does not clutter
-// test runs. It is restored on cleanup. Safe because these tests never run in
-// parallel — t.Setenv already forbids it.
+// silenceOutput redirects os.Stdout/Stderr to /dev/null for the test, restored
+// on cleanup. Safe because t.Setenv (used here and in laptop.sync) forbids parallel.
 func silenceOutput(t *testing.T) {
 	t.Helper()
 	devnull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
@@ -57,8 +50,7 @@ func silenceOutput(t *testing.T) {
 	})
 }
 
-// mustGit runs git in dir (the test's working directory if dir is empty) and
-// fails the test if it errors.
+// mustGit runs git in dir (cwd if empty) and fails the test on error.
 func mustGit(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	cmd := exec.Command("git", args...)
@@ -72,8 +64,7 @@ func mustGit(t *testing.T, dir string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// newCentralRepo creates an empty bare repository to stand in for the shared
-// sync remote.
+// newCentralRepo creates an empty bare repository for the shared sync remote.
 func newCentralRepo(t *testing.T) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "central.git")
@@ -81,9 +72,8 @@ func newCentralRepo(t *testing.T) string {
 	return dir
 }
 
-// seedRemote pushes a commit containing files (name -> content) to the bare
-// repository at central, so a test can simulate a remote that already has
-// history — be it an established sheets repo or an unrelated project.
+// seedRemote pushes a commit of name->content into central, simulating an
+// existing remote.
 func seedRemote(t *testing.T, central string, files map[string]string) {
 	t.Helper()
 	work := t.TempDir()
@@ -115,9 +105,7 @@ func newLaptop(t *testing.T, name string) *laptop {
 	return &laptop{home: home, sheets: sheets}
 }
 
-// sync runs she's sync as this laptop by pointing HOME at it, then calling
-// Sync. repo is passed straight through: non-empty for setup, empty for a
-// routine sync.
+// sync runs Sync as this laptop; non-empty repo is setup, empty is routine sync.
 func (l *laptop) sync(t *testing.T, repo string) error {
 	t.Helper()
 	t.Setenv("HOME", l.home)
@@ -145,9 +133,8 @@ func (l *laptop) sheetExists(name string) bool {
 	return err == nil
 }
 
-// TestSyncSetupAndPropagation covers the happy path: two machines set up
-// syncing against the same remote and changes flow both ways, with a final
-// no-op sync proving an idempotent run is not an error.
+// TestSyncSetupAndPropagation covers the happy path: two machines, both-way
+// propagation, and a final no-op sync proving idempotency.
 func TestSyncSetupAndPropagation(t *testing.T) {
 	requireGit(t)
 	gitEnv(t)
@@ -157,15 +144,14 @@ func TestSyncSetupAndPropagation(t *testing.T) {
 	a := newLaptop(t, "laptopA")
 	b := newLaptop(t, "laptopB")
 
-	// Laptop A: create sheets, then set up syncing.
+	// Laptop A establishes the remote.
 	a.writeSheet(t, "git", "git status > show tree\n")
 	a.writeSheet(t, "docker", "docker ps > list containers\n")
 	if err := a.sync(t, central); err != nil {
 		t.Fatalf("laptop A setup: %v", err)
 	}
 
-	// Laptop B: create its own sheet, then set up syncing. It should come
-	// away with A's sheets merged alongside its own.
+	// Laptop B joins; should end up with A's sheets plus its own.
 	b.writeSheet(t, "k8s", "kubectl get pods > list pods\n")
 	if err := b.sync(t, central); err != nil {
 		t.Fatalf("laptop B setup: %v", err)
@@ -176,7 +162,7 @@ func TestSyncSetupAndPropagation(t *testing.T) {
 		}
 	}
 
-	// Laptop A: a routine sync should pull B's new sheet down.
+	// A's routine sync should pull B's new sheet down.
 	if err := a.sync(t, ""); err != nil {
 		t.Fatalf("laptop A routine sync: %v", err)
 	}
@@ -197,7 +183,7 @@ func TestSyncSetupAndPropagation(t *testing.T) {
 		t.Errorf("laptop B git sheet = %q, want %q", got, editedGit)
 	}
 
-	// A sync with nothing to do must succeed and change nothing.
+	// A no-op sync must succeed and change nothing.
 	if err := b.sync(t, ""); err != nil {
 		t.Fatalf("no-op sync: %v", err)
 	}
@@ -206,10 +192,8 @@ func TestSyncSetupAndPropagation(t *testing.T) {
 	}
 }
 
-// TestSyncSetupOntoPopulatedRemote covers a fresh machine with no sheets of
-// its own joining a remote that another machine already populated. Setup must
-// adopt the remote's sheets wholesale rather than try to merge an empty local
-// history.
+// TestSyncSetupOntoPopulatedRemote covers a fresh machine with no sheets joining
+// an already-populated remote.
 func TestSyncSetupOntoPopulatedRemote(t *testing.T) {
 	requireGit(t)
 	gitEnv(t)
@@ -219,14 +203,13 @@ func TestSyncSetupOntoPopulatedRemote(t *testing.T) {
 	a := newLaptop(t, "laptopA")
 	b := newLaptop(t, "laptopB")
 
-	// Laptop A populates the remote.
 	a.writeSheet(t, "git", "git status > show tree\n")
 	a.writeSheet(t, "docker", "docker ps > list containers\n")
 	if err := a.sync(t, central); err != nil {
 		t.Fatalf("laptop A setup: %v", err)
 	}
 
-	// Laptop B has no sheets at all; setup should pull A's down.
+	// Laptop B has no sheets; setup should pull A's down.
 	if err := b.sync(t, central); err != nil {
 		t.Fatalf("laptop B setup onto populated remote: %v", err)
 	}
@@ -236,16 +219,14 @@ func TestSyncSetupOntoPopulatedRemote(t *testing.T) {
 		}
 	}
 
-	// The branch must also be wired up for routine syncs afterwards.
+	// Branch must be wired up for subsequent routine syncs.
 	if err := b.sync(t, ""); err != nil {
 		t.Fatalf("laptop B routine sync after setup: %v", err)
 	}
 }
 
-// TestSyncSetupRerun covers running setup again on a directory that is already
-// a sync repository — for instance to point it at a different remote. The
-// origin URL must be updated in place and the existing sheets pushed to the
-// new remote.
+// TestSyncSetupRerun covers re-running setup to point an existing sync dir at a
+// different remote.
 func TestSyncSetupRerun(t *testing.T) {
 	requireGit(t)
 	gitEnv(t)
@@ -255,31 +236,26 @@ func TestSyncSetupRerun(t *testing.T) {
 	second := newCentralRepo(t)
 	a := newLaptop(t, "laptop")
 
-	// Initial setup against the first remote.
 	a.writeSheet(t, "git", "git status > show tree\n")
 	if err := a.sync(t, first); err != nil {
 		t.Fatalf("initial setup: %v", err)
 	}
 
-	// Re-run setup pointing at a different remote.
 	if err := a.sync(t, second); err != nil {
 		t.Fatalf("setup re-run: %v", err)
 	}
 
-	// origin must now point at the second remote...
+	// origin moved and the existing sheet was pushed there.
 	if got := mustGit(t, a.sheets, "remote", "get-url", "origin"); got != second {
 		t.Errorf("origin = %q, want %q", got, second)
 	}
-	// ...and the existing sheet must have been pushed there.
 	if tree := mustGit(t, second, "ls-tree", "-r", "--name-only", syncBranch); !strings.Contains(tree, "git") {
 		t.Errorf("second remote does not contain the \"git\" sheet; tree:\n%s", tree)
 	}
 }
 
-// TestSyncConflict covers the case the routine is built to handle safely: the
-// same sheet edited on two machines between syncs. The second machine's sync
-// must fail clearly, name the sheet, and leave that machine's commit and
-// working tree intact — no half-finished rebase.
+// TestSyncConflict covers the same sheet edited on two machines: the second
+// sync must fail cleanly, name the sheet, and leave the working tree clean.
 func TestSyncConflict(t *testing.T) {
 	requireGit(t)
 	gitEnv(t)
@@ -289,7 +265,6 @@ func TestSyncConflict(t *testing.T) {
 	a := newLaptop(t, "laptopA")
 	b := newLaptop(t, "laptopB")
 
-	// Both laptops start from the same synced state.
 	a.writeSheet(t, "git", "git status > show tree\n")
 	if err := a.sync(t, central); err != nil {
 		t.Fatalf("laptop A setup: %v", err)
@@ -298,7 +273,7 @@ func TestSyncConflict(t *testing.T) {
 		t.Fatalf("laptop B setup: %v", err)
 	}
 
-	// Both edit the same sheet differently; A syncs first and wins.
+	// Both edit the same sheet; A syncs first and wins.
 	a.writeSheet(t, "git", "git status > A's version\n")
 	const bVersion = "git status > B's version\n"
 	b.writeSheet(t, "git", bVersion)
@@ -306,7 +281,6 @@ func TestSyncConflict(t *testing.T) {
 		t.Fatalf("laptop A sync: %v", err)
 	}
 
-	// B's sync must fail with a conflict that names the sheet.
 	err := b.sync(t, "")
 	if err == nil {
 		t.Fatal("laptop B sync: expected a conflict error, got nil")
@@ -318,13 +292,12 @@ func TestSyncConflict(t *testing.T) {
 		t.Errorf("conflict error %q does not list the conflicting sheet %q", err, "git")
 	}
 
-	// B's own edit must still be on disk, untouched.
+	// B's edit must still be on disk, untouched.
 	if got := b.readSheet(t, "git"); got != bVersion {
 		t.Errorf("after aborted sync, laptop B git sheet = %q, want %q", got, bVersion)
 	}
 
-	// The rebase must have been aborted cleanly: no rebase state left behind
-	// and a clean working tree.
+	// Rebase aborted cleanly: no leftover state, clean working tree.
 	for _, leftover := range []string{"rebase-merge", "rebase-apply"} {
 		if _, err := os.Stat(filepath.Join(b.sheets, ".git", leftover)); !os.IsNotExist(err) {
 			t.Errorf("rebase state %q left behind in %s/.git", leftover, b.sheets)
@@ -340,9 +313,8 @@ func TestSyncConflict(t *testing.T) {
 	}
 }
 
-// TestSyncWithoutSetup verifies that a routine sync before setup fails with a
-// message pointing the user at the setup command, rather than doing anything
-// surprising.
+// TestSyncWithoutSetup verifies a routine sync before setup fails with a
+// setup-pointing message.
 func TestSyncWithoutSetup(t *testing.T) {
 	requireGit(t)
 	gitEnv(t)
@@ -358,8 +330,8 @@ func TestSyncWithoutSetup(t *testing.T) {
 	}
 }
 
-// TestSyncSetupWritesMarker verifies that establishing a repository writes a
-// well-formed marker file, both locally and on the remote.
+// TestSyncSetupWritesMarker verifies setup writes a well-formed marker locally
+// and on the remote.
 func TestSyncSetupWritesMarker(t *testing.T) {
 	requireGit(t)
 	gitEnv(t)
@@ -372,7 +344,6 @@ func TestSyncSetupWritesMarker(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 
-	// Marker present locally and well-formed.
 	data, err := os.ReadFile(filepath.Join(a.sheets, markerName))
 	if err != nil {
 		t.Fatalf("read local marker: %v", err)
@@ -385,7 +356,6 @@ func TestSyncSetupWritesMarker(t *testing.T) {
 		t.Errorf("marker id = %q, want 64 hex chars", id)
 	}
 
-	// Marker present on the remote with the same id.
 	remoteID, ok := parseMarker(mustGit(t, central, "show", syncBranch+":"+markerName))
 	if !ok {
 		t.Fatal("remote marker is not well-formed")
@@ -395,10 +365,9 @@ func TestSyncSetupWritesMarker(t *testing.T) {
 	}
 }
 
-// TestSyncSetupRejectsForeignRepo covers the footgun the marker is built to
-// stop: pointing setup at an existing repo that is actually a different
-// project. Setup must refuse before any merge or push, and roll the
-// half-initialised ~/.sheets back so the user's files are untouched.
+// TestSyncSetupRejectsForeignRepo covers the footgun the marker stops: pointing
+// setup at a non-empty repo. Setup must refuse before any merge/push and roll
+// ~/.sheets back.
 func TestSyncSetupRejectsForeignRepo(t *testing.T) {
 	requireGit(t)
 	gitEnv(t)
@@ -420,19 +389,16 @@ func TestSyncSetupRejectsForeignRepo(t *testing.T) {
 	if !strings.Contains(err.Error(), "only initialises an empty repository") {
 		t.Errorf("error %q is not the expected non-empty-remote rejection", err)
 	}
-	// The half-initialised repository must have been rolled back...
 	if _, statErr := os.Stat(filepath.Join(a.sheets, ".git")); !os.IsNotExist(statErr) {
 		t.Errorf("expected %s/.git to be removed after rejection", a.sheets)
 	}
-	// ...and the user's own sheet left untouched.
 	if !a.sheetExists("git") {
 		t.Error("user's sheet was removed during rollback")
 	}
 }
 
-// TestSyncMarkerSharedAcrossLaptops verifies that a second machine joining an
-// established repository adopts the same repository id, so the two are bound
-// to the same sheets repo.
+// TestSyncMarkerSharedAcrossLaptops verifies a second machine joining an
+// established repo adopts the same id.
 func TestSyncMarkerSharedAcrossLaptops(t *testing.T) {
 	requireGit(t)
 	gitEnv(t)
@@ -464,8 +430,8 @@ func TestSyncMarkerSharedAcrossLaptops(t *testing.T) {
 	}
 }
 
-// TestSyncRunRejectsIdentityMismatch verifies that a routine sync refuses when
-// ~/.sheets has been re-pointed at a different sheets repository.
+// TestSyncRunRejectsIdentityMismatch verifies routine sync refuses when
+// ~/.sheets is re-pointed at a different repo.
 func TestSyncRunRejectsIdentityMismatch(t *testing.T) {
 	requireGit(t)
 	gitEnv(t)
@@ -474,22 +440,19 @@ func TestSyncRunRejectsIdentityMismatch(t *testing.T) {
 	repo1 := newCentralRepo(t)
 	repo2 := newCentralRepo(t)
 
-	// Set the laptop up against repo1.
 	a := newLaptop(t, "laptop")
 	a.writeSheet(t, "git", "git status > show tree\n")
 	if err := a.sync(t, repo1); err != nil {
 		t.Fatalf("setup against repo1: %v", err)
 	}
 
-	// Independently establish repo2 as a different sheets repo, with its own
-	// marker id, via a separate laptop.
+	// Establish repo2 as a different sheets repo via a separate laptop.
 	other := newLaptop(t, "other")
 	other.writeSheet(t, "docker", "docker ps > list containers\n")
 	if err := other.sync(t, repo2); err != nil {
 		t.Fatalf("setup repo2 via other laptop: %v", err)
 	}
 
-	// Re-point the first laptop's origin at repo2 and run a routine sync.
 	mustGit(t, a.sheets, "remote", "set-url", "origin", repo2)
 	err := a.sync(t, "")
 	if err == nil {
@@ -500,9 +463,8 @@ func TestSyncRunRejectsIdentityMismatch(t *testing.T) {
 	}
 }
 
-// TestSyncSetupMergeConflict covers a genuine sheet conflict during setup: two
-// machines independently created the same sheet with different content. Setup
-// must fail clearly and leave the merge in place for the user to resolve.
+// TestSyncSetupMergeConflict covers a real sheet conflict during setup; the
+// merge is left for the user to resolve.
 func TestSyncSetupMergeConflict(t *testing.T) {
 	requireGit(t)
 	gitEnv(t)
@@ -512,13 +474,12 @@ func TestSyncSetupMergeConflict(t *testing.T) {
 	a := newLaptop(t, "laptopA")
 	b := newLaptop(t, "laptopB")
 
-	// Laptop A establishes the repo with a "git" sheet.
 	a.writeSheet(t, "git", "git status > A's version\n")
 	if err := a.sync(t, central); err != nil {
 		t.Fatalf("laptop A setup: %v", err)
 	}
 
-	// Laptop B has its own "git" sheet with different content.
+	// B has its own "git" sheet with different content.
 	b.writeSheet(t, "git", "git status > B's version\n")
 	err := b.sync(t, central)
 	if err == nil {
@@ -527,16 +488,14 @@ func TestSyncSetupMergeConflict(t *testing.T) {
 	if !strings.Contains(err.Error(), "the same sheet differs") {
 		t.Errorf("error %q is not the expected setup-conflict error", err)
 	}
-	// The conflicted merge must be left in place for the user to resolve.
+	// The conflicted merge is left in place for the user to resolve.
 	if _, statErr := os.Stat(filepath.Join(b.sheets, ".git", "MERGE_HEAD")); statErr != nil {
 		t.Errorf("expected an unresolved merge in %s/.git for the user to resolve", b.sheets)
 	}
 }
 
-// TestSyncSetupRejectsDifferentRepoOnRerun covers re-running setup against a
-// different sheets repository than the one ~/.sheets is already bound to. The
-// marker ids differ, so setup must refuse, abort the merge, and restore the
-// original remote.
+// TestSyncSetupRejectsDifferentRepoOnRerun covers re-pointing setup at a
+// different sheets repo: refuse, abort the merge, restore the original remote.
 func TestSyncSetupRejectsDifferentRepoOnRerun(t *testing.T) {
 	requireGit(t)
 	gitEnv(t)
@@ -545,15 +504,12 @@ func TestSyncSetupRejectsDifferentRepoOnRerun(t *testing.T) {
 	repoA := newCentralRepo(t)
 	repoB := newCentralRepo(t)
 
-	// One laptop establishes repoA.
 	a := newLaptop(t, "laptopA")
 	a.writeSheet(t, "git", "git status > show tree\n")
 	if err := a.sync(t, repoA); err != nil {
 		t.Fatalf("laptop A setup: %v", err)
 	}
 
-	// Another laptop establishes repoB — a distinct sheets repo with its own
-	// marker id.
 	b := newLaptop(t, "laptopB")
 	b.writeSheet(t, "docker", "docker ps > list containers\n")
 	if err := b.sync(t, repoB); err != nil {
@@ -568,17 +524,16 @@ func TestSyncSetupRejectsDifferentRepoOnRerun(t *testing.T) {
 	if !strings.Contains(err.Error(), "different sheets repositories") {
 		t.Errorf("error %q is not the expected marker-mismatch error", err)
 	}
-	// The original remote must have been restored by the rollback.
+	// Origin restored by rollback, no half-finished merge left behind.
 	if got := mustGit(t, b.sheets, "remote", "get-url", "origin"); got != repoB {
 		t.Errorf("origin = %q after rejection, want it restored to %q", got, repoB)
 	}
-	// No half-finished merge left behind.
 	if _, statErr := os.Stat(filepath.Join(b.sheets, ".git", "MERGE_HEAD")); !os.IsNotExist(statErr) {
 		t.Errorf("expected the merge to be aborted, but MERGE_HEAD remains in %s/.git", b.sheets)
 	}
 }
 
-// TestParseMarker checks marker parsing in isolation, without any git.
+// TestParseMarker checks marker parsing without any git.
 func TestParseMarker(t *testing.T) {
 	const goodID = "ab0a7fdface20d8549d02fe4c90f16a7dd33b7f3586ea152229c1b53dc1f29ac"
 	tests := []struct {
