@@ -11,6 +11,9 @@ import (
 	"github.com/antonysastre/sheets/internal/sheet"
 )
 
+// version is overridden at build time via -ldflags "-X main.version=...".
+var version = "dev"
+
 func main() {
 	os.Exit(run(os.Args, os.Stdout, os.Stderr))
 }
@@ -36,7 +39,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return code
 		}
 		if err := sheet.Edit(name); err != nil {
-			return runtimeError(stderr, "edit failed: %v", err)
+			return runtimeError(stderr, "failed to edit sheet: %v", err)
 		}
 
 	case "--new", "-n":
@@ -45,12 +48,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return code
 		}
 		if err := sheet.New(name); err != nil {
-			return runtimeError(stderr, "new failed: %v", err)
+			return runtimeError(stderr, "failed to create sheet: %v", err)
 		}
 
 	case "--list", "-l":
 		if err := sheet.List(stdout); err != nil {
-			return runtimeError(stderr, "list failed: %v", err)
+			return runtimeError(stderr, "failed to list sheets: %v", err)
 		}
 
 	case "--sync", "-s":
@@ -59,11 +62,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return code
 		}
 		if err := sheet.Sync(repo); err != nil {
-			return runtimeError(stderr, "sync failed: %v", err)
+			return runtimeError(stderr, "failed to sync sheets: %v", err)
 		}
 
 	case "--help", "-h":
 		printUsage(stdout)
+
+	case "--version", "-V":
+		_, _ = fmt.Fprintf(stdout, "she %s\n", version)
 
 	// "--" ends option parsing, so the next argument is taken literally —
 	// the only way to view a sheet whose name begins with a dash.
@@ -95,7 +101,7 @@ func viewSheet(name string, stdout, stderr io.Writer) int {
 	}
 
 	if !sheet.Exists(name) {
-		_, _ = fmt.Fprintf(stderr, "No cheat sheet found for '%s'.\n", name)
+		_, _ = fmt.Fprintf(stderr, "No cheat sheet found for %q.\n", name)
 		_, _ = fmt.Fprintf(stderr, "Run 'she --edit %s' to create one.\n", name)
 		return 1
 	}
@@ -163,6 +169,7 @@ Usage:
   she --new, -n <tool>	Create new cheat sheet
   she --sync, -s [repo]	Sync sheets to a git repo (pass repo to set up)
   she --help, -h	Show this help
+  she --version, -V	Print version and exit
 
 Examples:
   she docker		View docker sheet

@@ -140,10 +140,6 @@ func List(w io.Writer) error {
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			_, _ = fmt.Fprintln(w, "No sheets found. Run 'she --edit <tool>' to create one.")
-			return nil
-		}
 		return fmt.Errorf("read directory: %w", err)
 	}
 
@@ -152,12 +148,12 @@ func List(w io.Writer) error {
 		return nil
 	}
 
-	_, _ = fmt.Fprintln(w, "\x1b[36;1mAvailable sheets:\x1b[0m")
+	_, _ = fmt.Fprintln(w, ansiCyanBold+"Available sheets:"+ansiReset)
 	for _, entry := range entries {
 		if entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
-		_, _ = fmt.Fprintf(w, "  \x1b[32m%s\x1b[0m\n", entry.Name())
+		_, _ = fmt.Fprintf(w, "  %s%s%s\n", ansiGreen, entry.Name(), ansiReset)
 	}
 	return nil
 }
@@ -187,11 +183,13 @@ func New(name string) error {
 	return cmd.Run()
 }
 
+// editor resolves the user's preferred editor, following the long-standing
+// Unix convention of consulting VISUAL before EDITOR.
 func editor() string {
-	if e := os.Getenv("EDITOR"); e != "" {
+	if e := os.Getenv("VISUAL"); e != "" {
 		return e
 	}
-	if e := os.Getenv("VISUAL"); e != "" {
+	if e := os.Getenv("EDITOR"); e != "" {
 		return e
 	}
 	return defaultEditor

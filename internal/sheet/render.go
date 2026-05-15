@@ -6,10 +6,12 @@ import (
 )
 
 const (
-	ansiReset  = "\x1b[0m"
-	ansiDim    = "\x1b[90m"
-	ansiGreen  = "\x1b[32;1m"
-	ansiItalic = "\x1b[3m"
+	ansiReset    = "\x1b[0m"
+	ansiDim      = "\x1b[90m"
+	ansiGreen    = "\x1b[32;1m"
+	ansiItalic   = "\x1b[3m"
+	ansiYellow   = "\x1b[33m"
+	ansiCyanBold = "\x1b[36;1m"
 )
 
 // RenderLine formats a single sheet line for terminal display. Lines starting
