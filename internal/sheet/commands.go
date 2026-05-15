@@ -6,6 +6,7 @@ package sheet
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -114,9 +115,9 @@ func Edit(name string) error {
 	}
 
 	if exists {
-		fmt.Printf("Editing: %s\n", name)
+		fmt.Fprintf(os.Stderr, "Editing: %s\n", name)
 	} else {
-		fmt.Printf("Created: %s\n", name)
+		fmt.Fprintf(os.Stderr, "Created: %s\n", name)
 	}
 
 	cmd := exec.Command(editor(), path)
@@ -126,8 +127,8 @@ func Edit(name string) error {
 	return cmd.Run()
 }
 
-// List prints the names of all stored sheets to standard output.
-func List() error {
+// List prints the names of all stored sheets to w.
+func List(w io.Writer) error {
 	if err := EnsureDir(); err != nil {
 		return fmt.Errorf("create sheets directory: %w", err)
 	}
@@ -140,23 +141,23 @@ func List() error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			fmt.Println("No sheets found. Run 'she edit <tool>' to create one.")
+			_, _ = fmt.Fprintln(w, "No sheets found. Run 'she --edit <tool>' to create one.")
 			return nil
 		}
 		return fmt.Errorf("read directory: %w", err)
 	}
 
 	if len(entries) == 0 {
-		fmt.Println("No sheets found. Run 'she edit <tool>' to create one.")
+		_, _ = fmt.Fprintln(w, "No sheets found. Run 'she --edit <tool>' to create one.")
 		return nil
 	}
 
-	fmt.Println("\x1b[36;1mAvailable sheets:\x1b[0m")
+	_, _ = fmt.Fprintln(w, "\x1b[36;1mAvailable sheets:\x1b[0m")
 	for _, entry := range entries {
 		if entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
-		fmt.Printf("  \x1b[32m%s\x1b[0m\n", entry.Name())
+		_, _ = fmt.Fprintf(w, "  \x1b[32m%s\x1b[0m\n", entry.Name())
 	}
 	return nil
 }
@@ -170,14 +171,14 @@ func New(name string) error {
 	}
 
 	if _, err := os.Stat(path); err == nil {
-		return fmt.Errorf("sheet %q already exists; use 'she edit %s' to edit", name, name)
+		return fmt.Errorf("sheet %q already exists; use 'she --edit %s' to edit", name, name)
 	}
 
 	if err := Create(name); err != nil {
 		return fmt.Errorf("create sheet: %w", err)
 	}
 
-	fmt.Printf("Created: %s\n", name)
+	fmt.Fprintf(os.Stderr, "Created: %s\n", name)
 
 	cmd := exec.Command(editor(), path)
 	cmd.Stdin = os.Stdin
