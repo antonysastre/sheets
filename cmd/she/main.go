@@ -38,7 +38,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		if code != 0 {
 			return code
 		}
-		if err := sheet.Edit(name); err != nil {
+		if err := sheet.Edit(stderr, name); err != nil {
 			return runtimeError(stderr, "failed to edit sheet: %v", err)
 		}
 
@@ -47,7 +47,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		if code != 0 {
 			return code
 		}
-		if err := sheet.New(name); err != nil {
+		if err := sheet.New(stderr, name); err != nil {
 			return runtimeError(stderr, "failed to create sheet: %v", err)
 		}
 
@@ -93,8 +93,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 // viewSheet renders the named sheet and returns the process exit code: 0 if
 // the sheet was found and rendered, 1 if the sheet does not exist, 2 for a
-// usage error. The rendered sheet itself is written by sheet.View directly to
-// os.Stdout, not through the stdout argument.
+// usage error. Rendered content goes to stdout; diagnostics go to stderr.
 func viewSheet(name string, stdout, stderr io.Writer) int {
 	if name == "" {
 		return usageError(stderr, "usage: she <tool>")
@@ -110,7 +109,7 @@ func viewSheet(name string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return runtimeError(stderr, "failed to resolve sheet path: %v", err)
 	}
-	if err := sheet.View(path); err != nil {
+	if err := sheet.View(stdout, stderr, path); err != nil {
 		return runtimeError(stderr, "failed to view sheet: %v", err)
 	}
 	return 0

@@ -2,6 +2,7 @@ package sheet
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -38,23 +39,23 @@ func readKey() (byte, error) {
 	return buf[0], nil
 }
 
-func shouldContinue() bool {
-	fmt.Print(ansiDim + "[Press any key... (q to quit)]" + ansiReset)
+func shouldContinue(w io.Writer) bool {
+	fmt.Fprint(w, ansiDim+"[Press any key... (q to quit)]"+ansiReset)
 
 	key, err := readKey()
 	if err != nil {
-		fmt.Println()
+		fmt.Fprintln(w)
 		return false
 	}
 
-	fmt.Print(eraseLine)
+	fmt.Fprint(w, eraseLine)
 
 	return key != 'q' && key != 'Q'
 }
 
-// View reads the sheet file at path, validates its format, and prints the
-// rendered content to standard output, paginating to terminal height.
-func View(path string) error {
+// View renders the sheet at path. Rendered content is written to stdout;
+// format-validation warnings are written to stderr.
+func View(stdout, stderr io.Writer, path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("read sheet: %w", err)
@@ -63,11 +64,11 @@ func View(path string) error {
 	lines := strings.Split(string(data), "\n")
 
 	if issues := ValidateFormat(lines); len(issues) > 0 {
-		fmt.Println(ansiYellow + "Format warnings:" + ansiReset)
+		fmt.Fprintln(stderr, ansiYellow+"Format warnings:"+ansiReset)
 		for _, msg := range issues {
-			fmt.Println("  ", msg)
+			fmt.Fprintln(stderr, "  ", msg)
 		}
-		fmt.Println()
+		fmt.Fprintln(stderr)
 	}
 
 	pageSize := terminalHeight() - 2
@@ -84,7 +85,7 @@ func View(path string) error {
 
 		for _, line := range lines[start:end] {
 			if line != "" {
-				fmt.Println(RenderLine(line))
+				fmt.Fprintln(stdout, RenderLine(line))
 			}
 		}
 
@@ -92,7 +93,7 @@ func View(path string) error {
 			break
 		}
 
-		if !shouldContinue() {
+		if !shouldContinue(stdout) {
 			break
 		}
 		start = end

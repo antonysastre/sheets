@@ -95,8 +95,9 @@ func Create(name string) (err error) {
 }
 
 // Edit opens the sheet for name in the user's editor, creating it from the
-// template first if it does not yet exist.
-func Edit(name string) error {
+// template first if it does not yet exist. Status messages are written to
+// stderr.
+func Edit(stderr io.Writer, name string) error {
 	if err := EnsureDir(); err != nil {
 		return fmt.Errorf("create sheets directory: %w", err)
 	}
@@ -115,9 +116,9 @@ func Edit(name string) error {
 	}
 
 	if exists {
-		fmt.Fprintf(os.Stderr, "Editing: %s\n", name)
+		fmt.Fprintf(stderr, "Editing: %s\n", name)
 	} else {
-		fmt.Fprintf(os.Stderr, "Created: %s\n", name)
+		fmt.Fprintf(stderr, "Created: %s\n", name)
 	}
 
 	cmd := exec.Command(editor(), path)
@@ -158,9 +159,10 @@ func List(w io.Writer) error {
 	return nil
 }
 
-// New creates a fresh sheet for name and opens it in the editor. It returns
-// an error if a sheet with that name already exists.
-func New(name string) error {
+// New creates a fresh sheet for name and opens it in the editor. Status
+// messages are written to stderr. Returns an error if a sheet with that name
+// already exists.
+func New(stderr io.Writer, name string) error {
 	path, err := Path(name)
 	if err != nil {
 		return err
@@ -174,7 +176,7 @@ func New(name string) error {
 		return fmt.Errorf("create sheet: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "Created: %s\n", name)
+	fmt.Fprintf(stderr, "Created: %s\n", name)
 
 	cmd := exec.Command(editor(), path)
 	cmd.Stdin = os.Stdin

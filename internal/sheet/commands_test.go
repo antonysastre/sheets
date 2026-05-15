@@ -1,6 +1,7 @@
 package sheet
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -129,7 +130,7 @@ func TestNewFailsWhenSheetExists(t *testing.T) {
 	if err := Create("git"); err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
-	err := New("git")
+	err := New(io.Discard, "git")
 	if err == nil {
 		t.Fatalf("New(\"git\") on existing sheet returned nil error")
 	}
