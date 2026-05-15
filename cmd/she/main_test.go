@@ -31,6 +31,7 @@ func TestRun(t *testing.T) {
 		{"sync with flag operand", []string{"she", "--sync", "--help"}, 2, "", "unknown flag: --help"},
 		{"sync with dash operand", []string{"she", "--sync", "-x"}, 2, "", "unknown flag: -x"},
 		{"empty tool name", []string{"she", ""}, 2, "", "usage: she <tool>"},
+		{"sheet not found", []string{"she", "nonexistent"}, 1, "", "No cheat sheet found"},
 	}
 
 	for _, tt := range tests {

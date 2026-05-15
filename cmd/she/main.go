@@ -85,18 +85,19 @@ func run(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-// viewSheet reports on stdout whether the named sheet exists and returns the
-// process exit code. The rendered sheet itself is written by sheet.View
-// directly to os.Stdout, not through the stdout argument.
+// viewSheet renders the named sheet and returns the process exit code: 0 if
+// the sheet was found and rendered, 1 if the sheet does not exist, 2 for a
+// usage error. The rendered sheet itself is written by sheet.View directly to
+// os.Stdout, not through the stdout argument.
 func viewSheet(name string, stdout, stderr io.Writer) int {
 	if name == "" {
 		return usageError(stderr, "usage: she <tool>")
 	}
 
 	if !sheet.Exists(name) {
-		_, _ = fmt.Fprintf(stdout, "No cheat sheet found for '%s'.\n", name)
-		_, _ = fmt.Fprintf(stdout, "Run 'she --edit %s' to create one.\n", name)
-		return 0
+		_, _ = fmt.Fprintf(stderr, "No cheat sheet found for '%s'.\n", name)
+		_, _ = fmt.Fprintf(stderr, "Run 'she --edit %s' to create one.\n", name)
+		return 1
 	}
 
 	path, err := sheet.Path(name)
