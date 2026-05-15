@@ -22,7 +22,7 @@ func main() {
 func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) < 2 {
 		printUsage(stderr)
-		return 1
+		return 2
 	}
 
 	if err := sheet.EnsureDir(); err != nil {
@@ -31,7 +31,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	switch args[1] {
 	case "--edit", "-e":
-		name, code := requireOperand(args, stderr, "she --edit, -e <tool>")
+		name, code := requireToolOperand(args, stderr, "she --edit, -e <tool>")
 		if code != 0 {
 			return code
 		}
@@ -40,7 +40,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 
 	case "--new", "-n":
-		name, code := requireOperand(args, stderr, "she --new, -n <tool>")
+		name, code := requireToolOperand(args, stderr, "she --new, -n <tool>")
 		if code != 0 {
 			return code
 		}
@@ -111,12 +111,30 @@ func viewSheet(name string, stdout, stderr io.Writer) int {
 
 // requireOperand returns args[2], the operand for a command that requires one.
 // A missing operand is reported as a usage error and the returned exit code is
-// non-zero for the caller to propagate.
+// non-zero for the caller to propagate. Used by "--" for raw operands, which
+// may legitimately start with a dash.
 func requireOperand(args []string, stderr io.Writer, usage string) (string, int) {
 	if len(args) < 3 {
 		return "", usageError(stderr, "usage: %s", usage)
 	}
 	return args[2], 0
+}
+
+// requireToolOperand returns args[2] as a non-empty tool name, rejecting an
+// absent, empty, or flag-shaped operand as a usage error. Used by --edit and
+// --new, whose operand must be a real sheet name (never a flag).
+func requireToolOperand(args []string, stderr io.Writer, usage string) (string, int) {
+	name, code := requireOperand(args, stderr, usage)
+	if code != 0 {
+		return "", code
+	}
+	if name == "" {
+		return "", usageError(stderr, "usage: %s", usage)
+	}
+	if strings.HasPrefix(name, "-") {
+		return "", usageError(stderr, "unknown flag: %s", name)
+	}
+	return name, 0
 }
 
 // optionalOperand returns args[2] for a command whose operand is optional,

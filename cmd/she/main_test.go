@@ -18,12 +18,16 @@ func TestRun(t *testing.T) {
 		wantStdout string // substring; "" means stdout must be empty
 		wantStderr string // substring; "" means stderr must be empty
 	}{
-		{"no args", []string{"she"}, 1, "", "Usage:"},
+		{"no args", []string{"she"}, 2, "", "Usage:"},
 		{"help to stdout", []string{"she", "--help"}, 0, "Usage:", ""},
 		{"help short flag", []string{"she", "-h"}, 0, "Usage:", ""},
 		{"unknown flag", []string{"she", "--bogus"}, 2, "", "unknown flag: --bogus"},
 		{"edit without operand", []string{"she", "--edit"}, 2, "", "usage: she --edit"},
+		{"edit with flag operand", []string{"she", "--edit", "--help"}, 2, "", "unknown flag: --help"},
+		{"edit with empty operand", []string{"she", "--edit", ""}, 2, "", "usage: she --edit"},
 		{"new without operand", []string{"she", "--new"}, 2, "", "usage: she --new"},
+		{"new with flag operand", []string{"she", "--new", "-x"}, 2, "", "unknown flag: -x"},
+		{"new with empty operand", []string{"she", "--new", ""}, 2, "", "usage: she --new"},
 		{"sync with flag operand", []string{"she", "--sync", "--help"}, 2, "", "unknown flag: --help"},
 		{"sync with dash operand", []string{"she", "--sync", "-x"}, 2, "", "unknown flag: -x"},
 		{"empty tool name", []string{"she", ""}, 2, "", "usage: she <tool>"},
