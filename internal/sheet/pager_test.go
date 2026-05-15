@@ -32,7 +32,7 @@ func TestViewDumpsAllLinesWhenStdoutIsNotTerminal(t *testing.T) {
 	const n = 200
 	var b strings.Builder
 	for i := 0; i < n; i++ {
-		fmt.Fprintf(&b, "cmd%03d > desc%03d\n", i, i)
+		fmt.Fprintf(&b, "cmd%03d # desc%03d\n", i, i)
 	}
 	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
@@ -50,32 +50,6 @@ func TestViewDumpsAllLinesWhenStdoutIsNotTerminal(t *testing.T) {
 	}
 	if strings.Contains(stdout.String(), "Press any key") {
 		t.Errorf("stdout contains pager prompt; non-TTY should not paginate")
-	}
-}
-
-// Format warnings are diagnostic output and must go to stderr so they do not
-// corrupt the data stream when stdout is piped.
-func TestViewWarningsGoToStderr(t *testing.T) {
-	withHome(t)
-	if err := EnsureDir(); err != nil {
-		t.Fatalf("EnsureDir() error = %v", err)
-	}
-	dir, _ := Dir()
-	path := filepath.Join(dir, "bad")
-	if err := os.WriteFile(path, []byte("missing separator\n"), 0o644); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-
-	var stdout, stderr bytes.Buffer
-	if err := View(&stdout, &stderr, path); err != nil {
-		t.Fatalf("View() error = %v", err)
-	}
-
-	if !strings.Contains(stderr.String(), "Format warnings") {
-		t.Errorf("stderr = %q, want it to contain 'Format warnings'", stderr.String())
-	}
-	if strings.Contains(stdout.String(), "Format warnings") {
-		t.Errorf("stdout = %q, want it to NOT contain 'Format warnings'", stdout.String())
 	}
 }
 

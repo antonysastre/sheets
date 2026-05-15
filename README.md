@@ -68,12 +68,38 @@ are untouched.
 
 ## Sheet Format
 
-Each line should use the format:
+Sheets use a small markdown-flavored format. Each line is one of:
+
+- **A section header** — any line whose first non-whitespace character
+  is an uppercase letter. Rendered in bold.
+- **A comment** — a line whose first non-whitespace character is `#`.
+  Free-standing notes; rendered dim.
+- **A command, optionally with a description** — the command is the
+  text from the start of the line up to the first `#`; anything after
+  that `#` is the description. A line with no `#` is just a bare
+  command.
+- **A blank line** — left blank in the output.
+
+Example:
+
 ```
-command > description
+List
+git tag                      # all tags, alphabetical
+git tag -l 'v1.*'            # filter by pattern
+
+Delete
+git tag -d v1.2.3            # local
+# or: git push origin :refs/tags/v1.2.3
 ```
 
-Lines starting with `//` are ignored.
+The first `#` on a line always ends the command, so commands that
+contain a literal `#` (e.g. URL fragments) can't carry a description
+on the same line — drop the description or move it to a free-standing
+`#` comment on the next line.
+
+> **Note:** This is a hard cutover from the older `command > description`
+> / `//` syntax. Existing sheets in that format will render as plain
+> command lines until you port them.
 
 ## Configuration
 

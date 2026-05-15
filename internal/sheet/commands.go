@@ -89,7 +89,7 @@ func Create(name string) (err error) {
 		}
 	}()
 
-	const template = "command > description\ncommand > description\n"
+	const template = "Section\ncommand # description\ncommand # description\n"
 	_, err = f.WriteString(template)
 	return err
 }

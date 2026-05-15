@@ -78,8 +78,8 @@ func TestCreateWritesTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile(%q) error = %v", path, err)
 	}
-	if !strings.Contains(string(data), " > ") {
-		t.Errorf("template missing ' > ' separator: %q", data)
+	if !strings.Contains(string(data), " # ") {
+		t.Errorf("template missing ' # ' separator: %q", data)
 	}
 }
 

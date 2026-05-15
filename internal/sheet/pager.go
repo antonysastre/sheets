@@ -86,10 +86,11 @@ func shouldContinue(w io.Writer) bool {
 	return key != 'q' && key != 'Q'
 }
 
-// View renders the sheet at path. Rendered content is written to stdout;
-// format-validation warnings are written to stderr. Output is paginated only
-// when stdout is an interactive terminal — piped or redirected output dumps
-// everything without prompting.
+// View renders the sheet at path to stdout, paginating to terminal height
+// when stdout is an interactive terminal. Piped or redirected output dumps
+// everything without prompting. The stderr writer is reserved for future
+// diagnostics and is currently unused — every line is structurally valid
+// under the markdown-flavored format.
 func View(stdout, stderr io.Writer, path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -97,14 +98,6 @@ func View(stdout, stderr io.Writer, path string) error {
 	}
 
 	lines := strings.Split(string(data), "\n")
-
-	if issues := ValidateFormat(lines); len(issues) > 0 {
-		fmt.Fprintln(stderr, ansiYellow+"Format warnings:"+ansiReset)
-		for _, msg := range issues {
-			fmt.Fprintln(stderr, "  ", msg)
-		}
-		fmt.Fprintln(stderr)
-	}
 
 	if !isTerminal(stdout) {
 		for _, line := range lines {
