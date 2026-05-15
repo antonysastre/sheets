@@ -88,22 +88,23 @@ func shouldContinue(w io.Writer) bool {
 
 // View renders the sheet at path to stdout, paginating to terminal height
 // when stdout is an interactive terminal. Piped or redirected output dumps
-// everything without prompting. The stderr writer is reserved for future
-// diagnostics and is currently unused — every line is structurally valid
-// under the markdown-flavored format.
+// everything without prompting. Blank source lines are preserved so the
+// author can use them as visual separators between sections, commands, and
+// free-standing comments. The stderr writer is reserved for future
+// diagnostics and is currently unused.
 func View(stdout, stderr io.Writer, path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("read sheet: %w", err)
 	}
 
-	lines := strings.Split(string(data), "\n")
+	// Trim the trailing newline so the final \n in a well-formed file
+	// doesn't produce a phantom blank line after the last entry.
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
 
 	if !isTerminal(stdout) {
 		for _, line := range lines {
-			if line != "" {
-				fmt.Fprintln(stdout, RenderLine(line))
-			}
+			fmt.Fprintln(stdout, RenderLine(line))
 		}
 		return nil
 	}
@@ -121,9 +122,7 @@ func View(stdout, stderr io.Writer, path string) error {
 		}
 
 		for _, line := range lines[start:end] {
-			if line != "" {
-				fmt.Fprintln(stdout, RenderLine(line))
-			}
+			fmt.Fprintln(stdout, RenderLine(line))
 		}
 
 		if end >= len(lines) {
