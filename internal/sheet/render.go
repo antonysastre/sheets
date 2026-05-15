@@ -1,6 +1,9 @@
 package sheet
 
-import "strings"
+import (
+	"strings"
+	"unicode/utf8"
+)
 
 const (
 	ansiReset    = "\x1b[0m"
@@ -15,7 +18,11 @@ const (
 // are free-standing comments; lines beginning with an uppercase ASCII letter
 // are section headers; everything else is a command line, optionally followed
 // by a '#'-introduced description.
-func RenderLine(line string) string {
+//
+// When width > 0, command-with-description lines are right-padded so that
+// all descriptions align in one vertical column — typically the caller
+// passes the result of MaxCommandWidth on the whole sheet.
+func RenderLine(line string, width int) string {
 	line = strings.TrimRight(line, "\r\n")
 	trimmed := strings.TrimLeft(line, " \t")
 
@@ -34,8 +41,40 @@ func RenderLine(line string) string {
 	cmd, desc, hasDesc := strings.Cut(trimmed, "#")
 	cmd = strings.TrimRight(cmd, " \t")
 	if !hasDesc {
-		return "  " + ansiGreen + cmd + ansiReset
+		return ansiGreen + cmd + ansiReset
 	}
 	desc = strings.TrimLeft(desc, " \t")
-	return "  " + ansiGreen + cmd + ansiReset + ansiDim + " · " + ansiReset + ansiItalic + desc + ansiReset
+
+	pad := ""
+	if w := utf8.RuneCountInString(cmd); width > w {
+		pad = strings.Repeat(" ", width-w)
+	}
+	return ansiGreen + cmd + ansiReset + pad + ansiDim + " · " + ansiReset + ansiItalic + desc + ansiReset
+}
+
+// MaxCommandWidth returns the visible rune length of the longest command on
+// any line that has both a command and a description. Lines without a
+// description, blank lines, headers, and free-standing comments are ignored
+// — they don't participate in column alignment.
+func MaxCommandWidth(lines []string) int {
+	max := 0
+	for _, line := range lines {
+		trimmed := strings.TrimLeft(strings.TrimRight(line, "\r\n"), " \t")
+		if trimmed == "" {
+			continue
+		}
+		first := trimmed[0]
+		if first == '#' || (first >= 'A' && first <= 'Z') {
+			continue
+		}
+		cmd, _, hasDesc := strings.Cut(trimmed, "#")
+		if !hasDesc {
+			continue
+		}
+		cmd = strings.TrimRight(cmd, " \t")
+		if w := utf8.RuneCountInString(cmd); w > max {
+			max = w
+		}
+	}
+	return max
 }

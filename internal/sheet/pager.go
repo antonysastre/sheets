@@ -101,10 +101,11 @@ func View(stdout, stderr io.Writer, path string) error {
 	// Trim the trailing newline so the final \n in a well-formed file
 	// doesn't produce a phantom blank line after the last entry.
 	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	width := MaxCommandWidth(lines)
 
 	if !isTerminal(stdout) {
 		for _, line := range lines {
-			fmt.Fprintln(stdout, RenderLine(line))
+			fmt.Fprintln(stdout, RenderLine(line, width))
 		}
 		return nil
 	}
@@ -122,7 +123,7 @@ func View(stdout, stderr io.Writer, path string) error {
 		}
 
 		for _, line := range lines[start:end] {
-			fmt.Fprintln(stdout, RenderLine(line))
+			fmt.Fprintln(stdout, RenderLine(line, width))
 		}
 
 		if end >= len(lines) {
