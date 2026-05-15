@@ -8,6 +8,9 @@ import (
 	"golang.org/x/term"
 )
 
+// eraseLine returns the cursor to column 0 and erases the current line.
+const eraseLine = "\r\x1b[2K"
+
 func terminalHeight() int {
 	const fallback = 24
 	_, h, err := term.GetSize(int(os.Stdout.Fd()))
@@ -24,6 +27,7 @@ func readKey() (byte, error) {
 		return 0, err
 	}
 	defer func() {
+		// Best-effort: there is nothing useful to do if Restore fails.
 		_ = term.Restore(fd, oldState)
 	}()
 
@@ -35,7 +39,7 @@ func readKey() (byte, error) {
 }
 
 func shouldContinue() bool {
-	fmt.Print("\x1b[90m[Press any key... (q to quit)]\x1b[0m")
+	fmt.Print(ansiDim + "[Press any key... (q to quit)]" + ansiReset)
 
 	key, err := readKey()
 	if err != nil {
@@ -43,7 +47,7 @@ func shouldContinue() bool {
 		return false
 	}
 
-	fmt.Println("\r" + strings.Repeat(" ", 40) + "\r")
+	fmt.Print(eraseLine)
 
 	return key != 'q' && key != 'Q'
 }
@@ -59,7 +63,7 @@ func View(path string) error {
 	lines := strings.Split(string(data), "\n")
 
 	if issues := ValidateFormat(lines); len(issues) > 0 {
-		fmt.Println("\x1b[33mFormat warnings:\x1b[0m")
+		fmt.Println(ansiYellow + "Format warnings:" + ansiReset)
 		for _, msg := range issues {
 			fmt.Println("  ", msg)
 		}
