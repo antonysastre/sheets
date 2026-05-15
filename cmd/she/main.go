@@ -36,7 +36,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return code
 		}
 		if err := sheet.Edit(name); err != nil {
-			return runtimeError(stderr, "edit failed: %v", err)
+			return runtimeError(stderr, "failed to edit sheet: %v", err)
 		}
 
 	case "--new", "-n":
@@ -45,12 +45,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return code
 		}
 		if err := sheet.New(name); err != nil {
-			return runtimeError(stderr, "new failed: %v", err)
+			return runtimeError(stderr, "failed to create sheet: %v", err)
 		}
 
 	case "--list", "-l":
 		if err := sheet.List(stdout); err != nil {
-			return runtimeError(stderr, "list failed: %v", err)
+			return runtimeError(stderr, "failed to list sheets: %v", err)
 		}
 
 	case "--sync", "-s":
@@ -59,7 +59,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return code
 		}
 		if err := sheet.Sync(repo); err != nil {
-			return runtimeError(stderr, "sync failed: %v", err)
+			return runtimeError(stderr, "failed to sync sheets: %v", err)
 		}
 
 	case "--help", "-h":
@@ -95,7 +95,7 @@ func viewSheet(name string, stdout, stderr io.Writer) int {
 	}
 
 	if !sheet.Exists(name) {
-		_, _ = fmt.Fprintf(stderr, "No cheat sheet found for '%s'.\n", name)
+		_, _ = fmt.Fprintf(stderr, "No cheat sheet found for %q.\n", name)
 		_, _ = fmt.Fprintf(stderr, "Run 'she --edit %s' to create one.\n", name)
 		return 1
 	}
