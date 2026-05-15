@@ -59,6 +59,12 @@ sheet was edited on two machines between syncs, `she` stops and tells you
 which sheet to resolve by hand; your local changes are committed and safe in
 the meantime.
 
+If two machines run `she --sync <repo>` against the same empty remote at
+exactly the same time, one push wins and the other is rejected. To recover
+on the losing machine, delete `~/.sheets/.git` and run `she --sync <repo>`
+again — it will adopt the winner's marker. Your sheet files in `~/.sheets/`
+are untouched.
+
 ## Sheet Format
 
 Each line should use the format:

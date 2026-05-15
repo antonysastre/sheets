@@ -286,7 +286,9 @@ func writeMarker(dir, id string) error {
 	return nil
 }
 
-// parseMarker extracts the id from marker content; ok requires a well-formed id.
+// parseMarker extracts the id from marker content; ok requires a well-formed
+// id. The .shetag filename is the only "is this ours?" check — the content
+// has no self-signature.
 func parseMarker(content string) (id string, ok bool) {
 	for _, line := range strings.Split(content, "\n") {
 		line = strings.TrimSpace(line)
