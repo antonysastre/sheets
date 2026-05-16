@@ -85,7 +85,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "--help", "-h":
 		printUsage(stdout)
 
-	case "--version", "-V":
+	case "--version", "-v":
 		_, _ = fmt.Fprintf(stdout, "she %s\n", versionString())
 
 	// "--" ends option parsing, so the next argument is taken literally —
@@ -185,7 +185,7 @@ Usage:
   she --new, -n <tool>	Create new cheat sheet
   she --sync, -s [repo]	Sync sheets to a git repo (pass repo to set up)
   she --help, -h	Show this help
-  she --version, -V	Print version and exit
+  she --version, -v	Print version and exit
 
 Examples:
   she docker		View docker sheet

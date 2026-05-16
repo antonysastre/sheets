@@ -27,7 +27,7 @@ she --edit, -e <tool> Edit cheat sheet (creates if missing)
 she --new, -n <tool>  Create new cheat sheet
 she --sync, -s [repo] Sync sheets to a git repo (pass repo to set up)
 she --help, -h        Show help
-she --version, -V     Print version and exit
+she --version, -v     Print version and exit
 ```
 
 ## Syncing
