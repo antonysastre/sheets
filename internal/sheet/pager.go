@@ -24,10 +24,12 @@ func terminalHeight() int {
 }
 
 // isTerminal reports whether w refers to an interactive terminal. A non-file
-// writer (e.g. bytes.Buffer in tests) or a pipe both yield false.
+// writer (e.g. bytes.Buffer in tests), a typed-nil *os.File, or a pipe all
+// yield false. The nil guard matters because an io.Writer holding a typed
+// nil *os.File is itself not == nil and would otherwise panic in Fd().
 func isTerminal(w io.Writer) bool {
 	f, ok := w.(*os.File)
-	if !ok {
+	if !ok || f == nil {
 		return false
 	}
 	return term.IsTerminal(int(f.Fd()))
@@ -66,8 +68,14 @@ func readKey() (byte, error) {
 	}()
 
 	buf := make([]byte, 1)
-	if _, err := os.Stdin.Read(buf); err != nil {
+	n, err := os.Stdin.Read(buf)
+	if err != nil {
 		return 0, err
+	}
+	if n == 0 {
+		// io.Reader permits (0, nil); guard so we don't return a phantom 0
+		// byte as if the user pressed a key.
+		return 0, io.ErrNoProgress
 	}
 	return buf[0], nil
 }

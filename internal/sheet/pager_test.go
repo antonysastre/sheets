@@ -60,3 +60,13 @@ func TestIsTerminalRejectsNonFiles(t *testing.T) {
 		t.Errorf("isTerminal(*bytes.Buffer) = true, want false")
 	}
 }
+
+// A typed-nil *os.File satisfies io.Writer with a non-nil interface header
+// but a nil concrete value. Without the explicit nil check, isTerminal would
+// dereference it via Fd() and panic.
+func TestIsTerminalRejectsTypedNilFile(t *testing.T) {
+	var f *os.File
+	if isTerminal(f) {
+		t.Errorf("isTerminal(typed-nil *os.File) = true, want false")
+	}
+}
