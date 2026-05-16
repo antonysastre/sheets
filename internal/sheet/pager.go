@@ -73,15 +73,15 @@ func readKey() (byte, error) {
 }
 
 func shouldContinue(w io.Writer) bool {
-	fmt.Fprint(w, ansiDim+"[Press any key... (q to quit)]"+ansiReset)
+	_, _ = fmt.Fprint(w, ansiDim+"[Press any key... (q to quit)]"+ansiReset)
 
 	key, err := readKey()
 	if err != nil {
-		fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w)
 		return false
 	}
 
-	fmt.Fprint(w, eraseLine)
+	_, _ = fmt.Fprint(w, eraseLine)
 
 	return key != 'q' && key != 'Q'
 }
@@ -105,7 +105,7 @@ func View(stdout, stderr io.Writer, path string) error {
 
 	if !isTerminal(stdout) {
 		for _, line := range lines {
-			fmt.Fprintln(stdout, RenderLine(line, width))
+			_, _ = fmt.Fprintln(stdout, RenderLine(line, width))
 		}
 		return nil
 	}
@@ -123,7 +123,7 @@ func View(stdout, stderr io.Writer, path string) error {
 		}
 
 		for _, line := range lines[start:end] {
-			fmt.Fprintln(stdout, RenderLine(line, width))
+			_, _ = fmt.Fprintln(stdout, RenderLine(line, width))
 		}
 
 		if end >= len(lines) {
