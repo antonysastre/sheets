@@ -5,6 +5,7 @@ package sheet
 // pure unit test.
 
 import (
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,7 +36,10 @@ func gitEnv(t *testing.T) {
 }
 
 // silenceOutput redirects os.Stdout/Stderr to /dev/null for the test, restored
-// on cleanup. Safe because t.Setenv (used here and in laptop.sync) forbids parallel.
+// on cleanup. Sync's own status messages now go through an injected writer
+// (io.Discard in the laptop helper), but the child git processes started by
+// streamGit still inherit the parent's stderr — this helper silences that
+// subprocess noise. Safe because t.Setenv forbids parallel runs.
 func silenceOutput(t *testing.T) {
 	t.Helper()
 	devnull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
@@ -105,11 +109,13 @@ func newLaptop(t *testing.T, name string) *laptop {
 	return &laptop{home: home, sheets: sheets}
 }
 
-// sync runs Sync as this laptop; non-empty repo is setup, empty is routine sync.
+// sync runs Sync as this laptop; non-empty repo is setup, empty is routine
+// sync. Sync's own status output is discarded; tests asserting on it should
+// call Sync directly with a *bytes.Buffer.
 func (l *laptop) sync(t *testing.T, repo string) error {
 	t.Helper()
 	t.Setenv("HOME", l.home)
-	return Sync(repo)
+	return Sync(io.Discard, repo)
 }
 
 func (l *laptop) writeSheet(t *testing.T, name, content string) {

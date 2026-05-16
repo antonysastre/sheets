@@ -61,7 +61,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		if code != 0 {
 			return code
 		}
-		if err := sheet.Sync(repo); err != nil {
+		if err := sheet.Sync(stderr, repo); err != nil {
 			return runtimeError(stderr, "failed to sync sheets: %v", err)
 		}
 

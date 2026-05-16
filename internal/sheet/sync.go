@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,8 +28,10 @@ const (
 var credentialURL = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*://)[^/@\s]+@`)
 
 // Sync synchronises ~/.sheets with a central git repository. Pass a non-empty
-// repo for first-time setup; pass "" for a routine commit-fetch-rebase-push cycle.
-func Sync(repo string) error {
+// repo for first-time setup; pass "" for a routine commit-fetch-rebase-push
+// cycle. Status messages are written to stderr; child git processes still
+// inherit the parent's stderr for interactive prompts and progress output.
+func Sync(stderr io.Writer, repo string) error {
 	if err := EnsureDir(); err != nil {
 		return fmt.Errorf("create sheets directory: %w", err)
 	}
@@ -41,15 +44,15 @@ func Sync(repo string) error {
 	}
 
 	if repo != "" {
-		return syncSetup(dir, repo)
+		return syncSetup(stderr, dir, repo)
 	}
-	return syncRun(dir)
+	return syncRun(stderr, dir)
 }
 
 // syncSetup wires ~/.sheets up to repo and performs the first exchange. A remote
 // that already has history must carry a marker, else it may be an unrelated
 // project; rejection rolls back the half-wired repo.
-func syncSetup(dir, repo string) error {
+func syncSetup(stderr io.Writer, dir, repo string) error {
 	createdGit := false
 	previousURL := ""
 	// displayRepo masks any URL credentials; use it for all user-facing output.
@@ -64,7 +67,7 @@ func syncSetup(dir, repo string) error {
 		} else if _, err := runGit(dir, "remote", "add", "origin", repo); err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "Updated sync remote to %s\n", displayRepo)
+		fmt.Fprintf(stderr, "Updated sync remote to %s\n", displayRepo)
 	} else {
 		if _, err := runGit(dir, "init", "-b", syncBranch); err != nil {
 			return err
@@ -73,7 +76,7 @@ func syncSetup(dir, repo string) error {
 		if _, err := runGit(dir, "remote", "add", "origin", repo); err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "Initialized sync repository in %s\n", dir)
+		fmt.Fprintf(stderr, "Initialized sync repository in %s\n", dir)
 	}
 
 	// rollback undoes the changes above on rejection or failure.
@@ -87,7 +90,7 @@ func syncSetup(dir, repo string) error {
 		}
 	}
 
-	fmt.Fprintln(os.Stderr, "Fetching remote sheets...")
+	fmt.Fprintln(stderr, "Fetching remote sheets...")
 	if err := streamGit(dir, "fetch", "origin"); err != nil {
 		rollback()
 		return fmt.Errorf("could not reach the remote %s — check the "+
@@ -104,8 +107,8 @@ func syncSetup(dir, repo string) error {
 		}
 		if !present {
 			rollback()
-			fmt.Fprintln(os.Stderr, "Hint: 'she --sync' only initializes an empty repository.")
-			fmt.Fprintln(os.Stderr, "      Create the repo with no README, license, or .gitignore, then retry.")
+			fmt.Fprintln(stderr, "Hint: 'she --sync' only initializes an empty repository.")
+			fmt.Fprintln(stderr, "      Create the repo with no README, license, or .gitignore, then retry.")
 			return fmt.Errorf("the remote %s has commits but no %s marker; no changes were made to %s",
 				displayRepo, markerName, dir)
 		}
@@ -149,23 +152,23 @@ func syncSetup(dir, repo string) error {
 	}
 
 	if !hasCommits(dir) {
-		fmt.Fprintln(os.Stderr, "Sync configured. Add sheets with 'she --new <tool>', then run 'she --sync'.")
+		fmt.Fprintln(stderr, "Sync configured. Add sheets with 'she --new <tool>', then run 'she --sync'.")
 		return nil
 	}
 
-	fmt.Fprintln(os.Stderr, "Pushing...")
+	fmt.Fprintln(stderr, "Pushing...")
 	if err := streamGit(dir, "push", "-u", "origin", syncBranch); err != nil {
 		// Not rolled back: the local repo is valid; re-run 'she --sync' to retry the push.
 		return err
 	}
 
-	fmt.Fprintln(os.Stderr, "Sync configured. Run 'she --sync' to sync from now on.")
+	fmt.Fprintln(stderr, "Sync configured. Run 'she --sync' to sync from now on.")
 	return nil
 }
 
 // syncRun is the routine sync: commit-fetch-rebase-push, in that order, so local
 // work replays cleanly on top of remote work.
-func syncRun(dir string) error {
+func syncRun(stderr io.Writer, dir string) error {
 	if !isGitRepo(dir) {
 		return errors.New("syncing is not set up — run 'she --sync <repo>' first")
 	}
@@ -178,12 +181,12 @@ func syncRun(dir string) error {
 		return err
 	}
 	if committed {
-		fmt.Fprintln(os.Stderr, "Committed local changes.")
+		fmt.Fprintln(stderr, "Committed local changes.")
 	} else {
-		fmt.Fprintln(os.Stderr, "No local changes to commit.")
+		fmt.Fprintln(stderr, "No local changes to commit.")
 	}
 
-	fmt.Fprintln(os.Stderr, "Fetching remote sheets...")
+	fmt.Fprintln(stderr, "Fetching remote sheets...")
 	if err := streamGit(dir, "fetch", "origin"); err != nil {
 		return err
 	}
@@ -211,16 +214,16 @@ func syncRun(dir string) error {
 	}
 
 	if !hasCommits(dir) {
-		fmt.Fprintln(os.Stderr, "No sheets to sync yet.")
+		fmt.Fprintln(stderr, "No sheets to sync yet.")
 		return nil
 	}
 
-	fmt.Fprintln(os.Stderr, "Pushing...")
+	fmt.Fprintln(stderr, "Pushing...")
 	if err := streamGit(dir, "push", "-u", "origin", syncBranch); err != nil {
 		return err
 	}
 
-	fmt.Fprintln(os.Stderr, "Sheets synced.")
+	fmt.Fprintln(stderr, "Sheets synced.")
 	return nil
 }
 
