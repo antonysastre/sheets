@@ -73,7 +73,7 @@ func syncSetup(dir, repo string) error {
 		if _, err := runGit(dir, "remote", "add", "origin", repo); err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "Initialised sync repository in %s\n", dir)
+		fmt.Fprintf(os.Stderr, "Initialized sync repository in %s\n", dir)
 	}
 
 	// rollback undoes the changes above on rejection or failure.
@@ -91,8 +91,8 @@ func syncSetup(dir, repo string) error {
 	if err := streamGit(dir, "fetch", "origin"); err != nil {
 		rollback()
 		return fmt.Errorf("could not reach the remote %s — check the "+
-			"repository exists and you have access; no changes were made to %s",
-			displayRepo, dir)
+			"repository exists and you have access; no changes were made to %s: %w",
+			displayRepo, dir, err)
 	}
 
 	if remoteBranchExists(dir, syncBranch) {
@@ -104,10 +104,9 @@ func syncSetup(dir, repo string) error {
 		}
 		if !present {
 			rollback()
-			return fmt.Errorf("the remote %s has commits but no %s marker — "+
-				"'she --sync' only initialises an empty repository. Create the "+
-				"repo with no README, license, or .gitignore, then retry; no "+
-				"changes were made to %s",
+			fmt.Fprintln(os.Stderr, "Hint: 'she --sync' only initializes an empty repository.")
+			fmt.Fprintln(os.Stderr, "      Create the repo with no README, license, or .gitignore, then retry.")
+			return fmt.Errorf("the remote %s has commits but no %s marker; no changes were made to %s",
 				displayRepo, markerName, dir)
 		}
 	} else {
@@ -228,18 +227,19 @@ func syncRun(dir string) error {
 // rebaseOntoRemote replays local commits onto the fetched remote branch. On
 // conflict it aborts cleanly and reports which sheets need manual resolution.
 func rebaseOntoRemote(dir string) error {
-	if _, err := runGit(dir, "rebase", "origin/"+syncBranch); err == nil {
+	_, rebaseErr := runGit(dir, "rebase", "origin/"+syncBranch)
+	if rebaseErr == nil {
 		return nil
 	}
 
 	conflicts, _ := runGit(dir, "diff", "--name-only", "--diff-filter=U")
 	if _, abortErr := runGit(dir, "rebase", "--abort"); abortErr != nil {
-		return fmt.Errorf("rebase failed and could not be aborted; "+
-			"resolve manually in %s: %w", dir, abortErr)
+		return fmt.Errorf("rebase failed (%v) and could not be aborted; "+
+			"resolve manually in %s: %w", rebaseErr, dir, abortErr)
 	}
 
 	if conflicts == "" {
-		return fmt.Errorf("could not rebase onto the remote; resolve manually in %s", dir)
+		return fmt.Errorf("could not rebase onto the remote; resolve manually in %s: %w", dir, rebaseErr)
 	}
 	list := "  " + strings.ReplaceAll(conflicts, "\n", "\n  ")
 	return fmt.Errorf("the same sheet was edited on two machines:\n%s\n"+

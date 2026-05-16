@@ -386,7 +386,7 @@ func TestSyncSetupRejectsForeignRepo(t *testing.T) {
 	if err == nil {
 		t.Fatal("setup against a non-empty repo: expected an error, got nil")
 	}
-	if !strings.Contains(err.Error(), "only initialises an empty repository") {
+	if !strings.Contains(err.Error(), "has commits but no") {
 		t.Errorf("error %q is not the expected non-empty-remote rejection", err)
 	}
 	if _, statErr := os.Stat(filepath.Join(a.sheets, ".git")); !os.IsNotExist(statErr) {
