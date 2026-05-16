@@ -122,7 +122,7 @@ func TestPathReturnsExactNameForCreationTarget(t *testing.T) {
 	}
 }
 
-func TestNewFailsWhenSheetExists(t *testing.T) {
+func TestInitializeFailsWhenSheetExists(t *testing.T) {
 	withHome(t)
 	if err := EnsureDir(); err != nil {
 		t.Fatalf("EnsureDir() error = %v", err)
@@ -130,15 +130,15 @@ func TestNewFailsWhenSheetExists(t *testing.T) {
 	if err := Create("git"); err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
-	err := New(io.Discard, "git")
+	err := Initialize(io.Discard, "git")
 	if err == nil {
-		t.Fatalf("New(\"git\") on existing sheet returned nil error")
+		t.Fatalf("Initialize(\"git\") on existing sheet returned nil error")
 	}
 	if !strings.Contains(err.Error(), "already exists") {
-		t.Errorf("New() error = %q, want substring %q", err.Error(), "already exists")
+		t.Errorf("Initialize() error = %q, want substring %q", err.Error(), "already exists")
 	}
 	if !strings.Contains(err.Error(), "she --edit") {
-		t.Errorf("New() error = %q, want substring %q", err.Error(), "she --edit")
+		t.Errorf("Initialize() error = %q, want substring %q", err.Error(), "she --edit")
 	}
 }
 

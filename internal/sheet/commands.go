@@ -159,10 +159,10 @@ func List(w io.Writer) error {
 	return nil
 }
 
-// New creates a fresh sheet for name and opens it in the editor. Status
-// messages are written to stderr. Returns an error if a sheet with that name
-// already exists.
-func New(stderr io.Writer, name string) error {
+// Initialize creates a fresh sheet for name and opens it in the editor.
+// Status messages are written to stderr. Returns an error if a sheet with
+// that name already exists.
+func Initialize(stderr io.Writer, name string) error {
 	path, err := Path(name)
 	if err != nil {
 		return err

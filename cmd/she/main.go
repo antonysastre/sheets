@@ -47,7 +47,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		if code != 0 {
 			return code
 		}
-		if err := sheet.New(stderr, name); err != nil {
+		if err := sheet.Initialize(stderr, name); err != nil {
 			return runtimeError(stderr, "failed to create sheet: %v", err)
 		}
 
