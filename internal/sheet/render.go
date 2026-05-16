@@ -52,12 +52,16 @@ func RenderLine(line string, width int) string {
 	return ansiGreen + cmd + ansiReset + pad + ansiDim + " · " + ansiReset + ansiItalic + desc + ansiReset
 }
 
-// MaxCommandWidth returns the visible rune length of the longest command on
-// any line that has both a command and a description. Lines without a
-// description, blank lines, headers, and free-standing comments are ignored
-// — they don't participate in column alignment.
+// MaxCommandWidth returns the rune length of the longest command on any
+// line that has both a command and a description. Lines without a
+// description, blank lines, headers, and free-standing comments are
+// ignored — they don't participate in column alignment.
+//
+// Width is measured in runes, not terminal cells, so wide characters
+// (CJK, emoji) and tabs in commands will not align perfectly. Sheets
+// are ASCII in practice, so this is rarely visible.
 func MaxCommandWidth(lines []string) int {
-	max := 0
+	n := 0
 	for _, line := range lines {
 		trimmed := strings.TrimLeft(strings.TrimRight(line, "\r\n"), " \t")
 		if trimmed == "" {
@@ -72,9 +76,9 @@ func MaxCommandWidth(lines []string) int {
 			continue
 		}
 		cmd = strings.TrimRight(cmd, " \t")
-		if w := utf8.RuneCountInString(cmd); w > max {
-			max = w
+		if w := utf8.RuneCountInString(cmd); w > n {
+			n = w
 		}
 	}
-	return max
+	return n
 }

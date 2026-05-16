@@ -58,6 +58,12 @@ func TestRenderLine(t *testing.T) {
 			want:  "\x1b[32;1mgit rebase main\x1b[0m\x1b[90m · \x1b[0m\x1b[3mrebase\x1b[0m",
 		},
 		{
+			name:  "source padding stripped before width padding applied",
+			input: "git tag        # all tags",
+			width: 15,
+			want:  "\x1b[32;1mgit tag\x1b[0m        \x1b[90m · \x1b[0m\x1b[3mall tags\x1b[0m",
+		},
+		{
 			name:  "bare command without description",
 			input: "git tag -a v1.2.3 -m \"v1.2.3\"",
 			want:  "\x1b[32;1mgit tag -a v1.2.3 -m \"v1.2.3\"\x1b[0m",
