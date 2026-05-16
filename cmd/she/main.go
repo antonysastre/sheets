@@ -6,13 +6,30 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	"github.com/antonysastre/sheets/internal/sheet"
 )
 
 // version is overridden at build time via -ldflags "-X main.version=...".
+// When unset (e.g. `go install ...@latest`, which bypasses our Makefile),
+// versionString falls back to the module version from runtime/debug.
 var version = "dev"
+
+func versionString() string {
+	if version != "dev" {
+		return version
+	}
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return version
+	}
+	if v := info.Main.Version; v != "" && v != "(devel)" {
+		return v
+	}
+	return version
+}
 
 func main() {
 	os.Exit(run(os.Args, os.Stdout, os.Stderr))
@@ -69,7 +86,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		printUsage(stdout)
 
 	case "--version", "-V":
-		_, _ = fmt.Fprintf(stdout, "she %s\n", version)
+		_, _ = fmt.Fprintf(stdout, "she %s\n", versionString())
 
 	// "--" ends option parsing, so the next argument is taken literally —
 	// the only way to view a sheet whose name begins with a dash.

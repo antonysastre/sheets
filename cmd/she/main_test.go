@@ -65,3 +65,26 @@ func checkStream(t *testing.T, name, got, want string) {
 		t.Errorf("%s = %q, want it to contain %q", name, got, want)
 	}
 }
+
+// versionString prefers the ldflags-injected value when present so `make
+// build` carries `git describe`, but falls back to runtime/debug so a plain
+// `go install ...@latest` (no ldflags) still reports the module version.
+func TestVersionString(t *testing.T) {
+	orig := version
+	t.Cleanup(func() { version = orig })
+
+	version = "v1.2.3"
+	if got := versionString(); got != "v1.2.3" {
+		t.Errorf("ldflags-set: versionString() = %q, want %q", got, "v1.2.3")
+	}
+
+	// "dev" sentinel — fall back to runtime/debug. Under `go test`,
+	// debug.ReadBuildInfo populates a synthetic Main.Version of "(devel)",
+	// which versionString rejects in favor of "dev". We can't easily
+	// exercise the happy fallback path (it needs a module-aware install),
+	// so verify the (devel)-or-empty path stays at "dev".
+	version = "dev"
+	if got := versionString(); got != "dev" {
+		t.Errorf("dev sentinel: versionString() = %q, want %q", got, "dev")
+	}
+}
