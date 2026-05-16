@@ -73,44 +73,39 @@ func readKey() (byte, error) {
 }
 
 func shouldContinue(w io.Writer) bool {
-	fmt.Fprint(w, ansiDim+"[Press any key... (q to quit)]"+ansiReset)
+	_, _ = fmt.Fprint(w, ansiDim+"[Press any key... (q to quit)]"+ansiReset)
 
 	key, err := readKey()
 	if err != nil {
-		fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w)
 		return false
 	}
 
-	fmt.Fprint(w, eraseLine)
+	_, _ = fmt.Fprint(w, eraseLine)
 
 	return key != 'q' && key != 'Q'
 }
 
-// View renders the sheet at path. Rendered content is written to stdout;
-// format-validation warnings are written to stderr. Output is paginated only
-// when stdout is an interactive terminal — piped or redirected output dumps
-// everything without prompting.
+// View renders the sheet at path to stdout, paginating to terminal height
+// when stdout is an interactive terminal. Piped or redirected output dumps
+// everything without prompting. Blank source lines are preserved so the
+// author can use them as visual separators between sections, commands, and
+// free-standing comments. The stderr writer is reserved for future
+// diagnostics and is currently unused.
 func View(stdout, stderr io.Writer, path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("read sheet: %w", err)
 	}
 
-	lines := strings.Split(string(data), "\n")
-
-	if issues := ValidateFormat(lines); len(issues) > 0 {
-		fmt.Fprintln(stderr, ansiYellow+"Format warnings:"+ansiReset)
-		for _, msg := range issues {
-			fmt.Fprintln(stderr, "  ", msg)
-		}
-		fmt.Fprintln(stderr)
-	}
+	// Trim the trailing newline so the final \n in a well-formed file
+	// doesn't produce a phantom blank line after the last entry.
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	width := MaxCommandWidth(lines)
 
 	if !isTerminal(stdout) {
 		for _, line := range lines {
-			if line != "" {
-				fmt.Fprintln(stdout, RenderLine(line))
-			}
+			_, _ = fmt.Fprintln(stdout, RenderLine(line, width))
 		}
 		return nil
 	}
@@ -128,9 +123,7 @@ func View(stdout, stderr io.Writer, path string) error {
 		}
 
 		for _, line := range lines[start:end] {
-			if line != "" {
-				fmt.Fprintln(stdout, RenderLine(line))
-			}
+			_, _ = fmt.Fprintln(stdout, RenderLine(line, width))
 		}
 
 		if end >= len(lines) {

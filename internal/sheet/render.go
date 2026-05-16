@@ -1,8 +1,8 @@
 package sheet
 
 import (
-	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 const (
@@ -10,46 +10,75 @@ const (
 	ansiDim      = "\x1b[90m"
 	ansiGreen    = "\x1b[32;1m"
 	ansiItalic   = "\x1b[3m"
-	ansiYellow   = "\x1b[33m"
 	ansiCyanBold = "\x1b[36;1m"
 )
 
-// RenderLine formats a single sheet line for terminal display. Lines starting
-// with "//" are treated as comments and rendered as empty strings; lines
-// containing the " > " separator are split into a colored command/description
-// pair; all other lines are returned unchanged (modulo trailing newlines).
-func RenderLine(line string) string {
+// RenderLine formats a single sheet line for terminal display, following the
+// markdown-flavored format: blank lines stay blank; lines beginning with '#'
+// are free-standing comments; lines beginning with an uppercase ASCII letter
+// are section headers; everything else is a command line, optionally followed
+// by a '#'-introduced description.
+//
+// When width > 0, command-with-description lines are right-padded so that
+// all descriptions align in one vertical column — typically the caller
+// passes the result of MaxCommandWidth on the whole sheet.
+func RenderLine(line string, width int) string {
 	line = strings.TrimRight(line, "\r\n")
-	if strings.HasPrefix(line, "//") {
+	trimmed := strings.TrimLeft(line, " \t")
+
+	if trimmed == "" {
 		return ""
 	}
 
-	if idx := strings.Index(line, " > "); idx != -1 {
-		cmd := line[:idx]
-		desc := line[idx+3:]
-		indent := "  "
-		sep := ansiDim + " · " + ansiReset
-		return indent + ansiGreen + cmd + ansiReset + sep + ansiItalic + desc + ansiReset
+	first := trimmed[0]
+	switch {
+	case first == '#':
+		return ansiDim + ansiItalic + trimmed + ansiReset
+	case first >= 'A' && first <= 'Z':
+		return ansiCyanBold + trimmed + ansiReset
 	}
 
-	return line
+	cmd, desc, hasDesc := strings.Cut(trimmed, "#")
+	cmd = strings.TrimRight(cmd, " \t")
+	if !hasDesc {
+		return ansiGreen + cmd + ansiReset
+	}
+	desc = strings.TrimLeft(desc, " \t")
+
+	pad := ""
+	if w := utf8.RuneCountInString(cmd); width > w {
+		pad = strings.Repeat(" ", width-w)
+	}
+	return ansiGreen + cmd + ansiReset + pad + ansiDim + " · " + ansiReset + ansiItalic + desc + ansiReset
 }
 
-// ValidateFormat scans lines and returns human-readable messages for any
-// non-empty, non-comment line that does not contain the " > " separator.
-// The returned slice is empty when the input is well-formed.
-func ValidateFormat(lines []string) []string {
-	var issues []string
+// MaxCommandWidth returns the rune length of the longest command on any
+// line that has both a command and a description. Lines without a
+// description, blank lines, headers, and free-standing comments are
+// ignored — they don't participate in column alignment.
+//
+// Width is measured in runes, not terminal cells, so wide characters
+// (CJK, emoji) and tabs in commands will not align perfectly. Sheets
+// are ASCII in practice, so this is rarely visible.
+func MaxCommandWidth(lines []string) int {
 	n := 0
 	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "//") {
+		trimmed := strings.TrimLeft(strings.TrimRight(line, "\r\n"), " \t")
+		if trimmed == "" {
 			continue
 		}
-		n++
-		if !strings.Contains(line, " > ") {
-			issues = append(issues, fmt.Sprintf("line %d: missing ' > ' separator", n))
+		first := trimmed[0]
+		if first == '#' || (first >= 'A' && first <= 'Z') {
+			continue
+		}
+		cmd, _, hasDesc := strings.Cut(trimmed, "#")
+		if !hasDesc {
+			continue
+		}
+		cmd = strings.TrimRight(cmd, " \t")
+		if w := utf8.RuneCountInString(cmd); w > n {
+			n = w
 		}
 	}
-	return issues
+	return n
 }
