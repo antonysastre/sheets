@@ -1,4 +1,4 @@
-# she
+# sheets
 
 A simple command-line cheat sheet manager.
 
